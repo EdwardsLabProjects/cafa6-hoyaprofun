@@ -1,4 +1,4 @@
-import urllib.request, hashlib, os, os.path, csv, random
+import urllib.request, hashlib, os, os.path, csv, random, sys
 
 base = "https://edwardslab.bmcb.georgetown.edu/~nedwards/dropbox/"
 catalog = None
@@ -9,6 +9,7 @@ def download(dropbox,filename,size,hash):
     os.makedirs(cache,exist_ok=True)
     if not os.path.exists(tofile):
         print("Downloading %s... "%(filename,),end="")
+        sys.stdout.flush()
         urllib.request.urlretrieve(base+"/"+dropbox+"/"+filename,tofile)
         md5 = hashlib.md5(open(tofile,'rb').read()).hexdigest().lower()
         assert (size == os.path.getsize(tofile)) and (md5 == hash)
