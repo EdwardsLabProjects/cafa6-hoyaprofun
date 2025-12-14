@@ -14,7 +14,7 @@ train_ids = steps.load_train_ids(CONFIG)
 test_ids = steps.load_test_ids(CONFIG)
 
 # Train proteins only (n, dict)
-ngolabel, protein_to_golabel = steps.load_go_terms(CONFIG,cumweights)
+golabels, protein_to_golabel = steps.load_go_terms(CONFIG,cumweights)
 
 # Train and test proteins (n, dict)
 ngoaterm, protein_to_goaterm = steps.load_goa_terms(CONFIG,train_ids)
@@ -24,11 +24,11 @@ embed_dim, protein_to_embed = steps.load_protein_embeddings(CONFIG)
 # Prepare training data loaders and testing data dictionary
 train_loader, val_loader, data_dict = \
     steps.prepare_data_loaders(CONFIG, 
-                               golabel=(ngolabel, protein_to_golabel),
+                               golabel=(len(golabels), protein_to_golabel),
                                goaterm=(ngoaterm, protein_to_goaterm),
                                taxid=(ntaxid, protein_to_taxid),
                                embed=(embed_dim, protein_to_embed))
 
 model = steps.train_model(CONFIG,train_loader,val_loader)
 
-model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids,go)
+model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids,go,golabels)
