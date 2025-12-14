@@ -31,4 +31,4 @@ train_loader, val_loader, data_dict = \
 
 model = steps.train_model(CONFIG,train_loader,val_loader)
 
-model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids)
+model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids,go)
