@@ -2,3 +2,4 @@
 cafaeval
 _pycache__/
 .cache/
+*.pyc
