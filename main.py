@@ -9,6 +9,7 @@ go = steps.load_ontology(CONFIG)
 weights = steps.load_weights(CONFIG)
 cumweights = steps.compute_cumweights(CONFIG,weights,go)
 train_ids = steps.load_train_ids(CONFIG)
+test_ids = steps.load_test_ids(CONFIG)
 
 # Train proteins only (n, dict)
 ngolabel, protein_to_golabel = steps.load_go_terms(CONFIG,cumweights)
@@ -28,4 +29,4 @@ train_loader, val_loader, data_dict = \
 
 model = steps.train_model(CONFIG,train_loader,val_loader)
 
-
+model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids)

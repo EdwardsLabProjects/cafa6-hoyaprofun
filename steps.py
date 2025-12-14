@@ -52,6 +52,10 @@ def load_train_ids(CONFIG):
     train_ids_txt = getfile("train_ids.txt")
     return set(open(train_ids_txt).read().split())
 
+def load_test_ids(CONFIG):
+    test_ids_txt = getfile("test_ids.txt")
+    return set(open(test_ids_txt).read().split())
+
 def load_go_terms(CONFIG,weights,restriction=None):
     print("\n[1/6] Load protein terms to predict...")
 
@@ -406,4 +410,66 @@ def train_model(CONFIG,train_loader,val_loader):
     model.load_state_dict(best_weights)            
     return model
 
-def 
+def predict(CONFIG,model,data_dict,predict_ids,go,filename="model.tsv"):
+
+    print("\n" + "="*80)
+    print("PREDICTIONS (WITH TEMPERATURE SCALING)")
+    print("="*80)
+
+    model.eval()
+    test_protein_ids = list(predict_ids)
+
+    n_predictions = 0
+    with open(filename, 'w', newline='') as f:
+        with torch.no_grad():
+            for start in tqdm(range(0, len(test_protein_ids), CONFIG['PREDICT_BATCH_SIZE']), desc="Predicting", ascii=True):
+                batch_ids = test_protein_ids[start:start + CONFIG['PREDICT_BATCH_SIZE']]
+                X_batch = torch.FloatTensor([data_dict[p] for p in batch_ids]).to(device)
+                
+                if CONFIG['device'] == 'cuda':
+                    with torch.amp.autocast('cuda'):
+                        logits = model(X_batch)
+                else:
+                    logits = model(X_batch)
+                
+                # Apply temperature scaling
+                outputs = torch.sigmoid(logits / CONFIG['TEMPERATURE']).cpu().numpy()
+                
+                for i, pid in enumerate(batch_ids):
+                    probs = outputs[i]
+                    top_indices = np.argsort(probs)[::-1][:CONFIG['MAX_PREDS_PER_PROTEIN']]
+                    confident_indices = [idx for idx in top_indices if probs[idx] > CONFIG['MIN_CONFIDENCE']]
+
+                    term_probs = {}
+                    for idx in confident_indices:
+                        term_probs[top_terms[idx]] = probs[idx]
+
+                    for term in list(term_probs):
+                        t0 = go.get_term(term)
+                        for ti in t0.superclasses(with_self=False):
+                            if term_probs[term] > term_probs.get(ti.id,0.0):
+                                term_probs[ti.id] = term_probs[term]
+
+                    for term,prob in term_probs.items():
+                        if prob <= 0.0:
+                            continue
+                        line = f"{pid}\t{term}\t{min(prob, 0.999):.3f}\n"
+                        f.write(line)
+                        n_predictions += 1
+                
+                del X_batch, outputs, logits
+                if start % 1000 == 0:
+                    gc.collect()
+
+    print(f"✓ Generated {n_predictions:,} predictions")
+    return filename
+
+    # from pylab import *
+    # dl_df = pd.read_csv('temp_dl.tsv', sep='\t', header=None, names=['Id', 'GO term', 'Confidence'])
+    # hist(dl_df.Confidence,50)
+    # show()
+    # del model
+    # gc.collect()
+
+
+
