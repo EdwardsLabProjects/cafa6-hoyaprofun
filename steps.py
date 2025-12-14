@@ -418,7 +418,7 @@ def predict(CONFIG,model,data_dict,predict_ids,go,filename="model.tsv"):
     print("="*80)
 
     model.eval()
-    test_protein_ids = list(predict_ids)
+    test_protein_ids = list(set(predict_ids).intersection(set(data_dict.keys())))
 
     n_predictions = 0
     with open(filename, 'w', newline='') as f:
