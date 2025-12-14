@@ -118,7 +118,7 @@ def load_goa_terms(CONFIG,train_ids):
 
     nprotgoaterms = sum(term_counts.values())
     ngoaterms = len(term_counts)
-    top_goaterms = set([ t[0] for t in term_counts.most_common()[:CONFIG['TOP_K_GOATERMS']] ])
+    top_goaterms = list(set([ t[0] for t in term_counts.most_common()[:CONFIG['TOP_K_GOATERMS']] ]))
 
     goaterm_to_idx = {term: idx for idx, term in enumerate(top_goaterms)}
 
@@ -135,7 +135,7 @@ def load_goa_terms(CONFIG,train_ids):
     print(f">> {len(protein_to_goaterms)} proteins, {len(top_goaterms)} goa terms selected from train {ngoaterms} goaterms")
     print(f">> {ntopprotgoaterms} protein-goaterm pairs, from {nprotgoaterms} train protein-goaterm pairs.")
 
-    return len(top_goaterms),protein_to_goaterms
+    return top_goaterms,protein_to_goaterms
 
 def load_taxids(CONFIG,train_ids):
     print("\n[3/6] Load taxids...")
@@ -411,7 +411,7 @@ def train_model(CONFIG,train_loader,val_loader):
     model.load_state_dict(best_weights)            
     return model
 
-def predict(CONFIG,model,data_dict,predict_ids,go,filename="model.tsv"):
+def predict(CONFIG,model,data_dict,predict_ids,go,golabels,filename="model.tsv"):
 
     print("\n" + "="*80)
     print("PREDICTIONS (WITH TEMPERATURE SCALING)")
@@ -443,7 +443,7 @@ def predict(CONFIG,model,data_dict,predict_ids,go,filename="model.tsv"):
 
                     term_probs = {}
                     for idx in confident_indices:
-                        term_probs[top_terms[idx]] = probs[idx]
+                        term_probs[golabels[idx]] = probs[idx]
 
                     for term in list(term_probs):
                         t0 = go.get_term(term)
