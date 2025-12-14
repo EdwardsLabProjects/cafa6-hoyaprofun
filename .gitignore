@@ -1,2 +1,4 @@
 .venv/
 cafaeval
+_pycache__/
+.cache/
