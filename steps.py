@@ -425,7 +425,7 @@ def predict(CONFIG,model,data_dict,predict_ids,go,filename="model.tsv"):
         with torch.no_grad():
             for start in tqdm(range(0, len(test_protein_ids), CONFIG['PREDICT_BATCH_SIZE']), desc="Predicting", ascii=True):
                 batch_ids = test_protein_ids[start:start + CONFIG['PREDICT_BATCH_SIZE']]
-                X_batch = torch.FloatTensor([data_dict[p] for p in batch_ids]).to(CONFIG['device')
+                X_batch = torch.FloatTensor([data_dict[p] for p in batch_ids]).to(CONFIG['device'])
                 
                 if CONFIG['device'] == 'cuda':
                     with torch.amp.autocast('cuda'):
