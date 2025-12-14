@@ -80,7 +80,7 @@ def load_go_terms(CONFIG,weights,restriction=None):
     if restriction is not None:
         top_terms = [ t for t in top_terms if t not in restriction ]
     nterms = len(top_terms)
-    top_terms = list(set(top_terms[:CONFIG['TOP_K_LABELS']]))
+    top_terms = top_terms[:CONFIG['TOP_K_LABELS']]
 
     term_to_idx = {term: idx for idx, term in enumerate(top_terms)}
 
@@ -92,8 +92,6 @@ def load_go_terms(CONFIG,weights,restriction=None):
     for pr in protein_to_terms:
         ntopprotterm += len(protein_to_terms[pr]) 
 
-    # record index of each term in top_terms (not ordered?) for 0/1 encoding
-    term_to_idx = {term: idx for idx, term in enumerate(top_terms)}
     print(f">> {len(protein_to_terms)} training proteins, {len(top_terms)} terms selected from {nterms} terms,")
     print(f">> {ntopprotterm} protein-term pairs selected from {nprotterm} protein-term pairs.")
 
@@ -118,7 +116,7 @@ def load_goa_terms(CONFIG,train_ids):
 
     nprotgoaterms = sum(term_counts.values())
     ngoaterms = len(term_counts)
-    top_goaterms = set([ t[0] for t in term_counts.most_common()[:CONFIG['TOP_K_GOATERMS']] ])
+    top_goaterms = [ t[0] for t in term_counts.most_common()[:CONFIG['TOP_K_GOATERMS']] ]
 
     goaterm_to_idx = {term: idx for idx, term in enumerate(top_goaterms)}
 
@@ -135,7 +133,7 @@ def load_goa_terms(CONFIG,train_ids):
     print(f">> {len(protein_to_goaterms)} proteins, {len(top_goaterms)} goa terms selected from train {ngoaterms} goaterms")
     print(f">> {ntopprotgoaterms} protein-goaterm pairs, from {nprotgoaterms} train protein-goaterm pairs.")
 
-    return ngoaterms,protein_to_goaterms
+    return len(top_goaterms),protein_to_goaterms
 
 def load_taxids(CONFIG,train_ids):
     print("\n[3/6] Load taxids...")
