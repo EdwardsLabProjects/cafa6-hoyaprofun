@@ -124,7 +124,7 @@ def load_goa_terms(CONFIG,train_ids):
 
     # and restrict protein_to_terms dictionary to only those k terms.
     for protein in protein_to_goaterms:
-        protein_to_goaterms[protein] = [goaterm_to_idx[t] for t in protein_to_goaterms[protein] if t in top_goaterms]
+        protein_to_goaterms[protein] = [goaterm_to_idx[t] for t in protein_to_goaterms[protein] if t in goaterm_to_idx]
 
     ntopprotgoaterms = 0
     for pr in protein_to_goaterms:
