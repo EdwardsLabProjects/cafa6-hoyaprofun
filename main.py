@@ -3,6 +3,8 @@
 import sys
 import steps
 
+print("\n[0/6] Load configuration and initial files...")
+
 CONFIG = steps.configuration(sys.argv)
 
 go = steps.load_ontology(CONFIG)
