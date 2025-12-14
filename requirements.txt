@@ -1,0 +1,6 @@
+torch
+pronto
+numpy<2.3
+pandas<2.3
+tqdm
+scikit-learn<1.8
