@@ -19,6 +19,8 @@ def download(dropbox,filename,size,hash):
         if (size != os.path.getsize(tofile)) or (md5 !=  hash):
             os.unlink(tofile)
             return download(dropbox,filename,size,hash)
+        else:
+            print("Using cached file %s. "%(filename,))
     return tofile
 
 def file_catalog():
