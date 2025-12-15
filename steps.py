@@ -572,9 +572,9 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
     if outfile is None:
         if len(filenames) == 1:
             base = filenames[0].rsplit('.',1)[0]
-            outfile = base + ".png"
+            outfile = base + "_confidence.png"
         else:
-            outfile = "submission.png"
+            outfile = "confidence.png"
     for f in filenames:
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
@@ -590,11 +590,11 @@ def compute_results(gt,df):
         fn = len(gt)-tp
         print(base,pred,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn,)))
 
-def write_precall_plots(CONFIG,ground_truth,*filenames,outfile=None):
+def write_precall_plot(CONFIG,ground_truth,*filenames,outfile=None):
     if outfile is None:
         if len(filenames) == 1:
             base = filenames[0].rsplit('.',1)[0]
-            outfile = base + ".png"
+            outfile = base + "_precall.png"
         else:
             outfile = "precall.png"
     for f in filenames:
