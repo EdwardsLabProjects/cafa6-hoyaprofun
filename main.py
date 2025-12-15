@@ -22,7 +22,7 @@ ntaxid, protein_to_taxid = steps.load_taxids(CONFIG,train_ids)
 embed_dim, protein_to_embed = steps.load_protein_embeddings(CONFIG)
 
 # Prepare training data loaders and testing data dictionary
-train_loader, val_loader, data_dict = \
+train_loader, val_loader, data_loader = \
     steps.prepare_data_loaders(CONFIG, 
                                golabel=(len(golabels), protein_to_golabel),
                                goaterm=(ngoaterm, protein_to_goaterm),
@@ -32,3 +32,17 @@ train_loader, val_loader, data_dict = \
 model = steps.train_model(CONFIG,train_loader,val_loader)
 
 model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids,go,golabels)
+
+result_file = CONFIG["RESULT"]
+if CONFIG['MERGE_WITH_GOA']:
+    goa_pred_file = steps.write_goa_preds(CONFIG)
+    steps.combine_preds(CONFIG,model_pred_file,goa_pred_file,result_file)
+else:
+    shutil.copy(model_pred_file,result_file)
+
+
+
+
+
+
+

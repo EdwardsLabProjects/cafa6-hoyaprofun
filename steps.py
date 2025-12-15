@@ -17,7 +17,10 @@ from tqdm.auto import tqdm
 from util import getfile, getconfig
 
 def configuration(args):
-    CONFIG = getconfig('config.ini' if len(sys.argv) < 2 else sys.argv[1])["Config"]
+    config_filename = ('config.ini' if len(args) < 1 else args[0])
+    config = getconfig(config_filename)
+    CONFIG = config["Config"]
+    CONFIG.update(config["Files"])
 
     print("Random seed:",CONFIG['RANDOM_SEED'])
     np.random.seed(CONFIG['RANDOM_SEED'])
@@ -102,7 +105,7 @@ def load_goa_terms(CONFIG,train_ids):
     print("\n[2/6] Load goa terms...")
 
     # Make Python dictionary of protein accession to list of GOA terms
-    goa_uniprot_test_with_anc = getfile("goa_uniprot_test.226_with_anc.tsv")
+    goa_uniprot_test_with_anc = getfile(CONFIG["GOA_INPUT"])
     goa_terms_df = pd.read_csv(goa_uniprot_test_with_anc, sep='\t', 
                                header=None, usecols=[0,1,2], 
                                names=['protein', 'term', 'evidence'])
@@ -263,22 +266,27 @@ def prepare_data_loaders(CONFIG, **kwargs):
 
     # Make an efficient data-model for training...
     class ProteinDataset(Dataset):
-        def __init__(self, proteins, feature_dict, labels):
+        def __init__(self, proteins, feature_dict, labels=None):
             self.features = torch.tensor(
                 np.array([feature_dict[p] for p in proteins]), 
                 dtype=torch.float32
             )
-            self.labels = torch.tensor(labels, dtype=torch.float32)
+            self.len = len(proteins)
+            if labels:
+                self.labels = torch.tensor(labels, dtype=torch.float32)
 
         def __len__(self):
-            return len(self.labels)
+            return self.len
 
         def __getitem__(self, idx):
             # This is now just a fast tensor slice, no dictionary hashing needed
-            return self.features[idx], self.labels[idx]
+            if self.labels:
+                return self.features[idx], self.labels[idx]
+            return self.features[idx]
 
     train_dataset = ProteinDataset(train_proteins, data_dict, y_train)
     val_dataset = ProteinDataset(val_proteins, data_dict, y_val)
+    valid_dataset = ProteinDataset(valid_proteins, data_dict)
 
     del y_train, y_val
     gc.collect()
@@ -292,12 +300,19 @@ def prepare_data_loaders(CONFIG, **kwargs):
 
     val_loader = DataLoader(
         val_dataset, 
-        batch_size=CONFIG['BATCH_SIZE'], 
+        batch_size=CONFIG['PREDICT_BATCH_SIZE'], 
         shuffle=False,
         pin_memory=(CONFIG['device'] == 'cuda')
     )
 
-    return train_loader, val_loader, data_dict
+    data_loader = DataLoader(
+        valid_dataset,
+        batch_size=CONFIG['PREDICT_BATCH_SIZE'],
+        shuffle=False,
+        pin_memory=(CONFIG['device'] == 'cuda')
+    )
+
+    return train_loader, val_loader, data_loader
 
 def train_model(CONFIG,train_loader,val_loader):
 
@@ -409,22 +424,22 @@ def train_model(CONFIG,train_loader,val_loader):
     model.load_state_dict(best_weights)            
     return model
 
-def predict(CONFIG,model,data_dict,predict_ids,go,golabels,filename="model.tsv"):
+def predict(CONFIG,model,data_loader,go,golabels,filename=None):
+
+    if filename is None:
+        filename = CONFIG['MODEL_RESULT']
 
     print("\n" + "="*80)
     print("PREDICTIONS (WITH TEMPERATURE SCALING)")
     print("="*80)
 
     model.eval()
-    test_protein_ids = list(set(predict_ids).intersection(set(data_dict.keys())))
 
     n_predictions = 0
     with open(filename, 'w', newline='') as f:
         with torch.no_grad():
-            for start in tqdm(range(0, len(test_protein_ids), CONFIG['PREDICT_BATCH_SIZE']), desc="Predicting", ascii=True):
-                batch_ids = test_protein_ids[start:start + CONFIG['PREDICT_BATCH_SIZE']]
-                X_batch = torch.FloatTensor(numpy.array([data_dict[p] for p in batch_ids])).to(CONFIG['device'])
-                
+            for start in tqdm(range(0, len(data_loader), CONFIG['PREDICT_BATCH_SIZE']), desc="Predicting", ascii=True):
+                X_batch = data_loader[start:start + CONFIG['PREDICT_BATCH_SIZE']]
                 if CONFIG['device'] == 'cuda':
                     with torch.amp.autocast('cuda'):
                         logits = model(X_batch)
@@ -460,7 +475,7 @@ def predict(CONFIG,model,data_dict,predict_ids,go,golabels,filename="model.tsv")
                 if start % 1000 == 0:
                     gc.collect()
 
-    print(f"✓ Generated {n_predictions:,} predictions")
+    print(f">> Generated {n_predictions:,} predictions")
     return filename
 
     # from pylab import *
@@ -470,5 +485,77 @@ def predict(CONFIG,model,data_dict,predict_ids,go,golabels,filename="model.tsv")
     # del model
     # gc.collect()
 
+def write_goa_preds(CONFIG,filename=None):
+    if filename is None:
+        filename = CONFIG["GOA_RESULT"]
+    goa_pred_file = getfile(CONFIG["GOA_MERGE"])
+    blast_chunks = []
+    for chunk in pd.read_csv(goa_pred_file,
+                             header=None, sep='\t', 
+                             names=["Id","GO term","Evidence","Aspect",
+                                    "Experimental","Related","Original"],
+                             chunksize=1000000):
+        chunk = chunk[["Id","GO term"]]
+        chunk['Confidence'] = 1.0
+        blast_chunks.append(chunk)
+        if len(blast_chunks) >= 10:
+            blast_df = pd.concat(blast_chunks, ignore_index=True)
+            blast_chunks = [blast_df]
+            gc.collect()
 
+    blast_df = pd.concat(blast_chunks, ignore_index=True)
 
+    blast_df.to_csv(filename, sep='\t', header=False, index=False,
+                    quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+
+    return filename
+
+def read_submission(filename,**kwargs):
+    if 'header' not in kwargs:
+        kwargs['header'] = None
+    if 'names' not in kwargs:
+        kwargs['names'] = ["Id","GO term","Confidence"]
+    chunks = []
+    for chunk in pd.read_csv(filename, sep='\t', chunksize=1000000, **kwargs):
+        chunks.append(chunk)
+        if len(chunks) >= 10:
+            df = pd.concat(chunks, ignore_index=True)
+            chunks = [df]
+            gc.collect()
+    return pd.concat(chunks, ignore_index=True)
+
+def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
+
+    if pred_file is None:
+        pred_file = CONFIG["RESULT"]
+
+    goa_df = read_submission(CONFIG["GOA_RESULTS"])
+    goa_df['GOA_Confidence'] = goa_df['Confidence']
+    goa_df['Confidence'] = goa_df['Confidence'] * CONFIG['GOA_WEIGHT']
+
+    model_df = read_submission(CONFIG["MODEL_RESULTS"])
+    model_df["Model_Confidence"] = model_df["Confidence"]
+    model_df["Confidence"] = model_df["Confidence"] * CONFIG["MODEL_WEIGHT"]
+
+    print(f">> Model={len(model_df):,}, GOA={len(goa_df):,}")
+  
+    ensemble_df = pd.concat([model_df, goa_df], ignore_index=True)
+    del model_df, goa_df
+    gc.collect()
+    
+    ensemble_df = ensemble_df.groupby(['Id', 'GO term'], as_index=False).sum()
+    
+    bothpositive = ((ensemble_df['GOA_Confidence'] > 0.0) & (ensemble_df['Model_Confidence'] > 0.0))
+    ensemble_df.loc[bothpositive,'Confidence'] += CONFIG['CONSENSUS_BOOST']
+    ensemble_df['Confidence'] = ensemble_df['Confidence'].clip(lower=0.0,upper=1.0)
+        
+    ensemble_df = ensemble_df[ensemble_df['Confidence'] > 0.0]
+    
+    ensemble_df = ensemble_df[['Id', 'GO term', 'Confidence']]
+    ensemble_df = ensemble_df.sort_values(['Id', 'Confidence'], ascending=[True, False])
+    ensemble_df = ensemble_df.groupby('Id').head(1500)
+  
+    import csv
+    ensemble_df.to_csv('submission.tsv', sep='\t', header=False, index=False,
+                      quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+    print(f">> Saved {len(ensemble_df):,} predictions")
