@@ -487,7 +487,7 @@ def write_goa_preds(CONFIG,filename=None):
     blast_chunks = []
     for chunk in pd.read_csv(goa_pred_file,
                              header=None, sep='\t', 
-                             use_cols = [0,1],
+                             usecols = [0,1],
                              names=["Id","GO term"],
                              chunksize=1000000):
         chunk['Confidence'] = 1.0
@@ -553,3 +553,16 @@ def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
     ensemble_df.to_csv('submission.tsv', sep='\t', header=False, index=False,
                       quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
     print(f">> Saved {len(ensemble_df):,} predictions")
+
+def write_submission_plot(CONFIG,*filenames,outfile=None):
+    if outfile is None:
+        if len(filenames) == 1:
+            base = filenames[0].rsplit('.',1)[0]
+            outfile = base + ".png"
+        else:
+            outfile = "submission.png"
+    for f in filenames:
+        df = read_submission(f)
+        base = filename.rsplit('.',1)[0]
+        pylab.plot(sorted(df['Confidence'],reverse=True),'.',label=base)
+    pylab.savefig(outfile)

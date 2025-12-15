@@ -37,9 +37,10 @@ result_file = CONFIG["RESULT"]
 if CONFIG['MERGE_WITH_GOA']:
     goa_pred_file = steps.write_goa_preds(CONFIG)
     steps.combine_preds(CONFIG,model_pred_file,goa_pred_file,result_file)
+    steps.write_submission_plot(CONFIG,model_pred_file,goa_pred_file,result_file)
 else:
     shutil.copy(model_pred_file,result_file)
-
+    steps.write_submission_plot(CONFIG,model_pred_file)
 
 
 
