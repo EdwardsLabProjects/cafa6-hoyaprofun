@@ -62,6 +62,18 @@ def load_test_ids(CONFIG):
     test_ids_txt = getfile("test_ids.txt")
     return set(open(test_ids_txt).read().split())
 
+def load_train_terms_ground_truth(CONFIG):
+    fn = getfile("train_terms_with_anc.tsv")
+    df = pd.read_csv(fn, sep='\t', header=0, names=['protein', 'term'])
+    return set(df.itertuples(index=False, name=None))
+
+def load_ground_truth(CONFIG,train_terms=False):
+    fn = getfile(CONFIG["GROUND_TRUTH"])
+    df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1,6], names=['protein', 'term','exp'])
+    df = df[df.exp == 'EXP']
+    df = df[['protein','term']]
+    return set(df.itertuples(index=False, name=None))
+
 def load_go_terms(CONFIG,weights,restriction=None):
     print("\n[1/6] Load protein terms to predict...")
 
@@ -485,23 +497,24 @@ def write_goa_preds(CONFIG,filename=None):
     if filename is None:
         filename = CONFIG["GOA_RESULT"]
     goa_pred_file = getfile(CONFIG["GOA_MERGE"])
-    blast_chunks = []
+    chunks = []
     for chunk in pd.read_csv(goa_pred_file,
                              header=None, sep='\t', 
                              usecols = [0,1],
                              names=["Id","GO term"],
                              chunksize=1000000):
         chunk['Confidence'] = 1.0
-        blast_chunks.append(chunk)
-        if len(blast_chunks) >= 10:
-            blast_df = pd.concat(blast_chunks, ignore_index=True)
-            blast_chunks = [blast_df]
+        chunks.append(chunk)
+        if len(chunks) >= 10:
+            df = pd.concat(chunks, ignore_index=True)
+            chunks = [df]
             gc.collect()
 
-    blast_df = pd.concat(blast_chunks, ignore_index=True)
+    df = pd.concat(chunks, ignore_index=True)
 
-    blast_df.to_csv(filename, sep='\t', header=False, index=False,
-                    quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+    df.to_csv(filename, sep='\t', header=False, index=False,
+              quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
+              float_format="%.3f")
 
     return filename
 
@@ -550,9 +563,9 @@ def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
     ensemble_df = ensemble_df.sort_values(['Id', 'Confidence'], ascending=[True, False])
     ensemble_df = ensemble_df.groupby('Id').head(1500)
   
-    import csv
     ensemble_df.to_csv('submission.tsv', sep='\t', header=False, index=False,
-                      quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+                       quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
+                       float_format="%.3f")
     print(f">> Saved {len(ensemble_df):,} predictions")
 
 def write_submission_plot(CONFIG,*filenames,outfile=None):
@@ -566,4 +579,26 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
         pylab.plot(sorted(df['Confidence'],reverse=True),'.',label=base)
+    pylab.legend()
     pylab.savefig(outfile)
+
+def compute_results(gt,df):
+    for thr in sorted(set(df.Confidence)):
+        pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
+        tp = len(pred&gt)
+        fp = len(pred)-tp
+        fn = len(gt)-tp
+        print(base,pred,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn,)))
+
+def write_precall_plots(CONFIG,ground_truth,*filenames,outfile=None):
+    if outfile is None:
+        if len(filenames) == 1:
+            base = filenames[0].rsplit('.',1)[0]
+            outfile = base + ".png"
+        else:
+            outfile = "precall.png"
+    for f in filenames:
+        df = read_submission(f)
+        base = f.rsplit('.',1)[0]
+        pr = compute_results(base,ground_truth,df)
+
