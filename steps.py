@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from pronto import Ontology
 import numpy as np
 import pandas as pd
+import pylab
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
@@ -563,6 +564,6 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
             outfile = "submission.png"
     for f in filenames:
         df = read_submission(f)
-        base = filename.rsplit('.',1)[0]
+        base = f.rsplit('.',1)[0]
         pylab.plot(sorted(df['Confidence'],reverse=True),'.',label=base)
     pylab.savefig(outfile)
