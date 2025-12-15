@@ -1,5 +1,6 @@
 
 import sys
+import csv
 import random
 import gc
 from collections import Counter
@@ -267,12 +268,15 @@ def prepare_data_loaders(CONFIG, **kwargs):
     # Make an efficient data-model for training...
     class ProteinDataset(Dataset):
         def __init__(self, proteins, feature_dict, labels=None):
+            proteins = list(proteins)
             self.features = torch.tensor(
                 np.array([feature_dict[p] for p in proteins]), 
                 dtype=torch.float32
             )
+            self.proteins = proteins
             self.len = len(proteins)
-            if labels:
+            self.labels = None
+            if labels is not None:
                 self.labels = torch.tensor(labels, dtype=torch.float32)
 
         def __len__(self):
@@ -280,9 +284,9 @@ def prepare_data_loaders(CONFIG, **kwargs):
 
         def __getitem__(self, idx):
             # This is now just a fast tensor slice, no dictionary hashing needed
-            if self.labels:
+            if self.labels is not None:
                 return self.features[idx], self.labels[idx]
-            return self.features[idx]
+            return self.proteins[idx], self.features[idx]
 
     train_dataset = ProteinDataset(train_proteins, data_dict, y_train)
     val_dataset = ProteinDataset(val_proteins, data_dict, y_val)
@@ -438,8 +442,8 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
     n_predictions = 0
     with open(filename, 'w', newline='') as f:
         with torch.no_grad():
-            for start in tqdm(range(0, len(data_loader), CONFIG['PREDICT_BATCH_SIZE']), desc="Predicting", ascii=True):
-                X_batch = data_loader[start:start + CONFIG['PREDICT_BATCH_SIZE']]
+            for batch_ids, X_batch in tqdm(data_loader, desc="Predicting", total=len(data_loader), ascii=True):
+                X_batch = X_batch.to(CONFIG['device'], non_blocking=True)
                 if CONFIG['device'] == 'cuda':
                     with torch.amp.autocast('cuda'):
                         logits = model(X_batch)
@@ -471,19 +475,10 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                         f.write(line)
                         n_predictions += 1
                 
-                del X_batch, outputs, logits
-                if start % 1000 == 0:
-                    gc.collect()
+                del X_batch, outputs, logits, batch_ids
 
     print(f">> Generated {n_predictions:,} predictions")
     return filename
-
-    # from pylab import *
-    # dl_df = pd.read_csv('temp_dl.tsv', sep='\t', header=None, names=['Id', 'GO term', 'Confidence'])
-    # hist(dl_df.Confidence,50)
-    # show()
-    # del model
-    # gc.collect()
 
 def write_goa_preds(CONFIG,filename=None):
     if filename is None:
@@ -492,10 +487,9 @@ def write_goa_preds(CONFIG,filename=None):
     blast_chunks = []
     for chunk in pd.read_csv(goa_pred_file,
                              header=None, sep='\t', 
-                             names=["Id","GO term","Evidence","Aspect",
-                                    "Experimental","Related","Original"],
+                             use_cols = [0,1]
+                             names=["Id","GO term"],
                              chunksize=1000000):
-        chunk = chunk[["Id","GO term"]]
         chunk['Confidence'] = 1.0
         blast_chunks.append(chunk)
         if len(blast_chunks) >= 10:
@@ -529,11 +523,11 @@ def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
     if pred_file is None:
         pred_file = CONFIG["RESULT"]
 
-    goa_df = read_submission(CONFIG["GOA_RESULTS"])
+    goa_df = read_submission(CONFIG["GOA_RESULT"])
     goa_df['GOA_Confidence'] = goa_df['Confidence']
     goa_df['Confidence'] = goa_df['Confidence'] * CONFIG['GOA_WEIGHT']
 
-    model_df = read_submission(CONFIG["MODEL_RESULTS"])
+    model_df = read_submission(CONFIG["MODEL_RESULT"])
     model_df["Model_Confidence"] = model_df["Confidence"]
     model_df["Confidence"] = model_df["Confidence"] * CONFIG["MODEL_WEIGHT"]
 

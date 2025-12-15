@@ -5,7 +5,7 @@ import steps
 
 print("\n[0/6] Load configuration and initial files...")
 
-CONFIG = steps.configuration(sys.argv)
+CONFIG = steps.configuration(sys.argv[1:])
 
 go = steps.load_ontology(CONFIG)
 weights = steps.load_weights(CONFIG)
@@ -31,7 +31,7 @@ train_loader, val_loader, data_loader = \
 
 model = steps.train_model(CONFIG,train_loader,val_loader)
 
-model_pred_file = steps.predict(CONFIG,model,data_dict,test_ids,go,golabels)
+model_pred_file = steps.predict(CONFIG,model,data_loader,go,golabels)
 
 result_file = CONFIG["RESULT"]
 if CONFIG['MERGE_WITH_GOA']:
