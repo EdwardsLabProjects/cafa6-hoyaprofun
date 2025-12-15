@@ -487,7 +487,7 @@ def write_goa_preds(CONFIG,filename=None):
     blast_chunks = []
     for chunk in pd.read_csv(goa_pred_file,
                              header=None, sep='\t', 
-                             use_cols = [0,1]
+                             use_cols = [0,1],
                              names=["Id","GO term"],
                              chunksize=1000000):
         chunk['Confidence'] = 1.0
