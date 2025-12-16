@@ -646,10 +646,10 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     pylab.savefig(outfile)
 
 def run_cafa6_eval(CONFIG,filename):
-    gt = load_ground_truth(CONFIG)
+    gt = load_ground_truth(CONFIG,ancestors=False) 
     obo_file = getfile("go-basic.obo")
     ia_file =  getfile("IA.tsv")
-    train_gt = load_train_terms_ground_truth(CONFIG)
+    train_gt = load_train_terms_ground_truth(CONFIG,ancestors=False) 
 
     base = filename.rsplit('.',1)[0]
     shutil.rmtree(base)
@@ -658,10 +658,10 @@ def run_cafa6_eval(CONFIG,filename):
     gt_file = 'ground_truth.tsv'
 
     with open(gt_file,'wt') as wh:
-        for pracc,goacc in sorted(gt-train_gt):
+        for pracc,goacc in sorted(gt-train_gt): # remove all train terms
             print("\t".join([pracc,goacc]),file=wh)
 
-    exclude_file = 'exclude.tsv'
+    exclude_file = 'exclude.tsv' # exclude all train terms
     with open(exclude_file,'wt') as wh:
         for pracc,goacc in sorted(train_gt):
             print("\t".join([pracc,goacc]),file=wh)
