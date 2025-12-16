@@ -669,7 +669,7 @@ def run_cafa6_eval(CONFIG,filename):
     root_handler.setFormatter(log_formatter)
     
     df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=base, gt_file=gt_file,
-                             ia=ia_file, max_terms=1500, th_step=0.1, n_cpu=1)
-    write_results(df, dfs_best, out_dir=base, th_step=0.1)
-    print(df)
-    print(df_best)
+                             ia=ia_file, max_terms=1500, th_step=0.01, n_cpu=1)
+    write_results(df, dfs_best, out_dir=base, th_step=0.01)
+    # print(df)
+    # print(dfs_best)
