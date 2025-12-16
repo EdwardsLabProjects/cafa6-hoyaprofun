@@ -654,8 +654,8 @@ def run_cafa6_eval(CONFIG,filename):
     base = filename.rsplit('.',1)[0]
     os.makedirs(base,exist_ok=True)
     shutil.copy(filename,base+'/submission.tsv')
-    gt_file = base+'/ground_truth.tsv'
-    exclude_file = base+'/exclude.tsv'
+    gt_file = 'ground_truth.tsv'
+    exclude_file = 'exclude.tsv'
 
     gtdf.to_csv(gt_file, sep='\t', header=False, index=False,
                 quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
@@ -665,7 +665,7 @@ def run_cafa6_eval(CONFIG,filename):
 
     logging.basicConfig()
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.getLevelName('DEBUG'))
+    root_logger.setLevel(logging.getLevelName('INFO'))
     log_formatter = logging.Formatter("%(asctime)s [%(levelname)-5.5s] %(message)s")
     root_handler = root_logger.handlers[0]
     root_handler.setFormatter(log_formatter)
@@ -673,7 +673,7 @@ def run_cafa6_eval(CONFIG,filename):
     df, dfs_best = cafa_eval(obo_file=obo_file, 
                              pred_dir=base, gt_file=gt_file,
                              ia=ia_file, exclude=exclude_file, 
-                             max_terms=1500, th_step=0.1)
-    write_results(df, dfs_best)
+                             max_terms=1500, th_step=0.1, n_cpu=1)
+    write_results(df, dfs_best, out_dir=base, th_step=0.1)
     print(df)
     print(df_best)
