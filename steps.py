@@ -67,9 +67,9 @@ def load_train_terms_ground_truth(CONFIG):
     df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1], names=['protein', 'term'])
     return set(df.itertuples(index=False, name=None))
 
-def load_ground_truth(CONFIG,train_terms=False):
+def load_ground_truth(CONFIG):
     fn = getfile(CONFIG["GROUND_TRUTH"])
-    df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1,6], names=['protein', 'term','exp'])
+    df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,4], names=['protein', 'term','exp'])
     df = df[df.exp == 'EXP']
     df = df[['protein','term']]
     return set(df.itertuples(index=False, name=None))
