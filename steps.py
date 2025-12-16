@@ -594,8 +594,9 @@ def compute_results(base,gt,df,ignore=None):
         fn = len(gt)-tp
         prec = tp/(tp+fp)
         recall = tp/(tp+fn)
-        print(base,thr,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),))
-        retval.append((base,thr,tp,fp,fn,prec,recall))
+        f1 = 2*(prec*recall)/(prec + recall)
+        print(base,thr,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),"%.3f"%(f1,)))
+        retval.append((base,thr,tp,fp,fn,prec,recall,f1))
     return retval
 
 def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
