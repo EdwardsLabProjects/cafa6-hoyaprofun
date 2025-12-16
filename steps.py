@@ -1,6 +1,7 @@
 
 import sys
 import os
+import os.path
 import csv
 import random
 import gc
@@ -79,9 +80,10 @@ def load_train_terms_ground_truth(CONFIG,ancestors=True,asset=True):
 def load_ground_truth(CONFIG,ancestors=True,asset=True):
     if ancestors:
         fn = getfile(CONFIG["GROUND_TRUTH"])
+        df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,4], names=['protein', 'term','exp'])
     else:
         fn = getfile(CONFIG["GROUND_TRUTH_NOANC"])
-    df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,4], names=['protein', 'term','exp'])
+        df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,6], names=['protein', 'term','exp'])
     df = df[df.exp == 'EXP']
     df = df[['protein','term']]
     if not asset:
@@ -645,8 +647,8 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
 
 def run_cafa6_eval(CONFIG,filename):
     gtdf = load_ground_truth(CONFIG,ancestors=False,asset=False)
-    obo_file = getfile("go-basic.obo")
-    ia_file = getfile("IA.tsv")
+    obo_file = os.path.abspath(getfile("go-basic.obo"))
+    ia_file =  os.path.abspath(getfile("IA.tsv"))
     train_gtdf = load_train_terms_ground_truth(CONFIG,ancestors=False,asset=False)
 
     base = filename.rsplit('.',1)[0]
