@@ -1,5 +1,6 @@
 
 import sys
+import os
 import csv
 import random
 import gc
@@ -648,7 +649,7 @@ def run_cafa6_eval(CONFIG,filename):
     train_gtdf = load_train_terms_ground_truth(CONFIG,ancestors=False,asset=False)
 
     base = filename.rsplit('.',1)[0]
-    os.makedirs(base)
+    os.makedirs(base,exist_ok=True)
     shutil.copy(filename,base+'/submission.tsv')
     gt_file = base+'/ground_truth.tsv'
     exclude_file = base+'/exclude.tsv'
