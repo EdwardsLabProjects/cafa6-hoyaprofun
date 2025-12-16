@@ -89,6 +89,7 @@ def load_go_terms(CONFIG,weights,restriction=None):
     for terms in protein_to_terms.values():
         term_counts.update(terms)
     nprotterm = sum(term_counts.values())
+    nprot = len(protein_to_terms)
 
     # Top terms by weighted frequency...
     top_terms = [ t[0] for t in sorted(term_counts.items(),
