@@ -10,8 +10,8 @@ CONFIG = steps.configuration(sys.argv[1:])
 result_file = CONFIG["RESULT"]
 model_pred_file = CONFIG["MODEL_RESULT"]
 
-steps.cafa_eval(CONFIG,model_pred_file)
-steps.cafa_eval(CONFIG,result_file)
+steps.run_cafa6_eval(CONFIG,model_pred_file)
+steps.run_cafa6_eval(CONFIG,result_file)
 
 
 
