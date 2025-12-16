@@ -585,17 +585,21 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
 
 def compute_results(base,gt,df,ignore=None):
     retval = []
-    for thr in np.arange(0,1,0.01):
-        pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
+    scale=100
+    for thr in set(map(int,df.Confidence*scale)):
+        pred = set(df.loc[df.Confidence*scale>=thr,["Id","GO term"]].itertuples(index=False, name=None))
         if ignore is not None:
             pred.difference_update(ignore)
         tp = len(pred&gt)
         fp = len(pred)-tp
         fn = len(gt)-tp
+        if (tp + fp == 0) or (tp + fn == 0):
+            continue
         prec = tp/(tp+fp)
         recall = tp/(tp+fn)
-        f1 = 2*(prec*recall)/(prec + recall)
-        print(base,thr,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),"%.3f"%(f1,)))
+        if (prec+recall==0):
+            f1 = 2*(prec*recall)/(prec + recall)
+        print(base,"%.2f"%(thr/scale,),tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),"%.3f"%(f1,)))
         retval.append((base,thr,tp,fp,fn,prec,recall,f1))
     return retval
 
