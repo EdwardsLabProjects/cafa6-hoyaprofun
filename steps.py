@@ -646,22 +646,20 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     pylab.savefig(outfile)
 
 def run_cafa6_eval(CONFIG,filename):
-    gtdf = load_ground_truth(CONFIG,ancestors=False,asset=False)
-    obo_file = os.path.abspath(getfile("go-basic.obo"))
-    ia_file =  os.path.abspath(getfile("IA.tsv"))
-    train_gtdf = load_train_terms_ground_truth(CONFIG,ancestors=False,asset=False)
+    gt = load_ground_truth(CONFIG)
+    obo_file = getfile("go-basic.obo")
+    ia_file =  getfile("IA.tsv")
+    train_gt = load_train_terms_ground_truth(CONFIG)
 
     base = filename.rsplit('.',1)[0]
-    os.makedirs(base,exist_ok=True)
+    shutil.rmtree(base)
+    os.makedirs(base)
     shutil.copy(filename,base+'/submission.tsv')
     gt_file = 'ground_truth.tsv'
-    exclude_file = 'exclude.tsv'
 
-    gtdf.to_csv(gt_file, sep='\t', header=False, index=False,
-                quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
-
-    train_gtdf.to_csv(exclude_file, sep='\t', header=False, index=False,
-                      quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+    with open(gt_file,'wt') as wh:
+        for pracc,goacc in sorted(gt-train_gt):
+            print("\t".join([pracc,goacc]),file=wh)
 
     logging.basicConfig()
     root_logger = logging.getLogger()
@@ -670,10 +668,8 @@ def run_cafa6_eval(CONFIG,filename):
     root_handler = root_logger.handlers[0]
     root_handler.setFormatter(log_formatter)
     
-    df, dfs_best = cafa_eval(obo_file=obo_file, 
-                             pred_dir=base, gt_file=gt_file,
-                             ia=ia_file, exclude=exclude_file, 
-                             max_terms=1500, th_step=0.1, n_cpu=1)
+    df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=base, gt_file=gt_file,
+                             ia=ia_file, max_terms=1500, th_step=0.1, n_cpu=1)
     write_results(df, dfs_best, out_dir=base, th_step=0.1)
     print(df)
     print(df_best)
