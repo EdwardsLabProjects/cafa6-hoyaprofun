@@ -15,6 +15,8 @@ import pylab
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
+from cafaeval.evaluation import cafa_eval, write_results
+import logging
 
 from util import getfile, getconfig
 
@@ -62,16 +64,26 @@ def load_test_ids(CONFIG):
     test_ids_txt = getfile("test_ids.txt")
     return set(open(test_ids_txt).read().split())
 
-def load_train_terms_ground_truth(CONFIG):
-    fn = getfile("train_terms_with_anc.tsv")
+def load_train_terms_ground_truth(CONFIG,ancestors=True,asset=True):
+    if ancestors:
+        fn = getfile("train_terms_with_anc.tsv")
+    else:
+        fn = getfile("train_terms.tsv")
     df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1], names=['protein', 'term'])
+    if not asset:
+        return df
     return set(df.itertuples(index=False, name=None))
 
-def load_ground_truth(CONFIG):
-    fn = getfile(CONFIG["GROUND_TRUTH"])
+def load_ground_truth(CONFIG,ancestors=True,asset=True):
+    if ancestors:
+        fn = getfile(CONFIG["GROUND_TRUTH"])
+    else:
+        fn = getfile(CONFIG["GROUND_TRUTH_NOANC"])
     df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,4], names=['protein', 'term','exp'])
     df = df[df.exp == 'EXP']
     df = df[['protein','term']]
+    if not asset:
+        return df
     return set(df.itertuples(index=False, name=None))
 
 def load_go_terms(CONFIG,weights,restriction=None):
@@ -629,3 +641,35 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     pylab.legend()
     pylab.savefig(outfile)
 
+def run_cafa6_eval(CONFIG,filename):
+    gtdf = load_ground_truth(CONFIG,ancestors=False,asset=False)
+    obo_file = getfile("go-basic.obo")
+    ia_file = getfile("IA.tsv")
+    train_gtdf = load_train_terms_ground_truth(CONFIG,ancestors=False,asset=False)
+
+    base = filename.rsplit('.',1)[0]
+    os.makedirs(base)
+    shutil.copy(filename,base+'/submission.tsv')
+    gt_file = base+'/ground_truth.tsv'
+    exclude_file = base+'/exclude.tsv'
+
+    gtdf.to_csv(gt_file, sep='\t', header=False, index=False,
+                quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+
+    train_gtdf.to_csv(exclude_file, sep='\t', header=False, index=False,
+                      quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n')
+
+    logging.basicConfig()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.getLevelName('DEBUG'))
+    log_formatter = logging.Formatter("%(asctime)s [%(levelname)-5.5s] %(message)s")
+    root_handler = root_logger.handlers[0]
+    root_handler.setFormatter(log_formatter)
+    
+    df, dfs_best = cafa_eval(obo_file=obo_file, 
+                             pred_dir=base, gt_file=gt_file,
+                             ia=ia_file, exclude=exclude_file, 
+                             max_terms=1500, th_step=0.1)
+    write_results(df, dfs_best)
+    print(df)
+    print(df_best)
