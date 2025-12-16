@@ -576,6 +576,7 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
             outfile = base + "_confidence.png"
         else:
             outfile = "confidence.png"
+    pylab.figure()
     for f in filenames:
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
@@ -615,6 +616,7 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
         ground_truth1 = ground_truth.difference(ignore)
     else:
         ground_truth1 = ground_truth
+    pylab.figure()
     for f in filenames:
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
