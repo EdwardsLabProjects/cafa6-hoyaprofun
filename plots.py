@@ -20,7 +20,10 @@ steps.write_submission_plot(CONFIG,*result_files,outfile="confidence.png")
 train_truth = steps.load_train_terms_ground_truth(CONFIG)
 steps.write_precall_plot(CONFIG,train_truth,*result_files,outfile="train_pr.png")
 
-
+ground_truth = steps.load_ground_truth(CONFIG)
+steps.write_precall_plot(CONFIG,ground_truth,*result_files,outfile="ground_pr.png")
+steps.write_precall_plot(CONFIG,ground_truth,*result_files,
+                         ignore=train_truth,outfile="ground_no_train_pr.png")
 
 
 

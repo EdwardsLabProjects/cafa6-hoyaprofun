@@ -586,6 +586,7 @@ def compute_results(base,gt,df,ignore=None):
     retval = []
     for thr in np.arange(0,1,0.01)
         pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
+        pred.difference_update(ignore)
         tp = len(pred&gt)
         fp = len(pred)-tp
         fn = len(gt)-tp
@@ -602,10 +603,14 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
             outfile = base + "_precall.png"
         else:
             outfile = "precall.png"
+    if ignore is not None:
+        ground_truth1 = ground_truth.difference(ignore)
+    else:
+        ground_truth1 = ground_truth
     for f in filenames:
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
-        pr = compute_results(base,ground_truth,df,ignore=ignore)
+        pr = compute_results(base,ground_truth1,df,ignore=ignore)
         x = [ t[6] for t in pr]
         y = [ t[5] for t in pr]
         x = [x[0]] + x + [0]
