@@ -584,7 +584,7 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
 
 def compute_results(base,gt,df,ignore=None):
     retval = []
-    for thr in np.arange(0,1,0.01)
+    for thr in np.arange(0,1,0.01):
         pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
         pred.difference_update(ignore)
         tp = len(pred&gt)
