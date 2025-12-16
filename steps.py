@@ -580,14 +580,15 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
         pylab.plot(sorted(df['Confidence'],reverse=True),'.',label=base)
-    pylab.legend()
+    pylab.legend(loc="upper right")
     pylab.savefig(outfile)
 
 def compute_results(base,gt,df,ignore=None):
     retval = []
     for thr in np.arange(0,1,0.01):
         pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
-        pred.difference_update(ignore)
+        if ignore is not None:
+            pred.difference_update(ignore)
         tp = len(pred&gt)
         fp = len(pred)-tp
         fn = len(gt)-tp
