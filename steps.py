@@ -600,7 +600,7 @@ def compute_results(base,gt,df,ignore=None):
         if (prec+recall)==0:
             continue
         f1 = 2*(prec*recall)/(prec + recall)
-        print(base,"%.2f"%(thr/scale,),tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),"%.3f"%(f1,)))
+        print(base,"%.2f"%(thr/scale,),tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),),"%.3f"%(f1,))
         retval.append((base,thr,tp,fp,fn,prec,recall,f1))
     return retval
 
