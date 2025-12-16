@@ -661,6 +661,11 @@ def run_cafa6_eval(CONFIG,filename):
         for pracc,goacc in sorted(gt-train_gt):
             print("\t".join([pracc,goacc]),file=wh)
 
+    exclude_file = 'exclude.tsv'
+    with open(exclude_file,'wt') as wh:
+        for pracc,goacc in sorted(train_gt):
+            print("\t".join([pracc,goacc]),file=wh)
+
     logging.basicConfig()
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.getLevelName('INFO'))
@@ -669,7 +674,8 @@ def run_cafa6_eval(CONFIG,filename):
     root_handler.setFormatter(log_formatter)
     
     df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=base, gt_file=gt_file,
-                             ia=ia_file, max_terms=1500, th_step=0.01, n_cpu=1)
+                             ia=ia_file, exclude=exclude_file, 
+                             max_terms=1500, th_step=0.01, n_cpu=1)
     write_results(df, dfs_best, out_dir=base, th_step=0.01)
     # print(df)
     # print(dfs_best)
