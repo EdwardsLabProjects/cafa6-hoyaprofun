@@ -64,7 +64,7 @@ def load_test_ids(CONFIG):
 
 def load_train_terms_ground_truth(CONFIG):
     fn = getfile("train_terms_with_anc.tsv")
-    df = pd.read_csv(fn, sep='\t', header=0, names=['protein', 'term'])
+    df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1], names=['protein', 'term'])
     return set(df.itertuples(index=False, name=None))
 
 def load_ground_truth(CONFIG,train_terms=False):
