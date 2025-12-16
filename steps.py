@@ -582,15 +582,20 @@ def write_submission_plot(CONFIG,*filenames,outfile=None):
     pylab.legend()
     pylab.savefig(outfile)
 
-def compute_results(gt,df):
-    for thr in sorted(set(df.Confidence)):
+def compute_results(base,gt,df,ignore=None):
+    retval = []
+    for thr in np.arange(0,1,0.01)
         pred = set(df.loc[df.Confidence>=thr,["Id","GO term"]].itertuples(index=False, name=None))
         tp = len(pred&gt)
         fp = len(pred)-tp
         fn = len(gt)-tp
-        print(base,pred,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn,)))
+        prec = tp/(tp+fp)
+        recall = tp/(tp+fn)
+        print(base,thr,tp,fp,fn,"%.3f"%(100*tp/(tp+fp),),"%.3f"%(100*tp/(tp+fn),))
+        retval.append((base,thr,tp,fp,fn,prec,recall))
+    return retval
 
-def write_precall_plot(CONFIG,ground_truth,*filenames,outfile=None):
+def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     if outfile is None:
         if len(filenames) == 1:
             base = filenames[0].rsplit('.',1)[0]
@@ -600,5 +605,12 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,outfile=None):
     for f in filenames:
         df = read_submission(f)
         base = f.rsplit('.',1)[0]
-        pr = compute_results(base,ground_truth,df)
+        pr = compute_results(base,ground_truth,df,ignore=ignore)
+        x = [ t[6] for t in pr]
+        y = [ t[5] for t in pr]
+        x = [x[0]] + x + [0]
+        y = [0] + y + [y[-1]]
+        pylab.plot(x,y,label=base)
+    pylab.legend()
+    pylab.savefig(outfile)
 
