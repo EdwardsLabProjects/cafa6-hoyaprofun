@@ -38,16 +38,9 @@ if CONFIG['MERGE_WITH_GOA']:
     goa_pred_file = steps.write_goa_preds(CONFIG)
     steps.combine_preds(CONFIG,model_pred_file,goa_pred_file,result_file)
     steps.write_submission_plot(CONFIG,model_pred_file,goa_pred_file,result_file)
-
-    train_truth = steps.load_train_terms_ground_truth(CONFIG)
-    steps.write_precall_plot(CONFIG,train_truth,model_pred_file,result_file,outfile="train_pr.png")
-
 else:
     shutil.copy(model_pred_file,result_file)
     steps.write_submission_plot(CONFIG,model_pred_file)
-
-    train_truth = steps.load_train_terms_ground_truth(CONFIG)
-    steps.write_precall_plots(CONFIG,train_truth,result_file,outfile="train_pr.png")
 
 
 
