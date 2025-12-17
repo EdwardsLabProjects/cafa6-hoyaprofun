@@ -838,8 +838,8 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
 
     print(df_best)
 
-    for grp in set(df_best.group):
-        fws = df_best.loc[df_best.group==grp,"f_w"]
+    for group, df_group in df_best.groupby(level='group'):
+        fws = df_group.["f_w"].todict()
         print(fws)
         print(grp," ".join(map(str,fws))),sum(fws)
     
