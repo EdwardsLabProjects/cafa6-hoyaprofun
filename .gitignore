@@ -3,3 +3,6 @@ cafaeval
 _pycache__/
 .cache/
 *.pyc
+model_submission/
+submission/
+submissions/
