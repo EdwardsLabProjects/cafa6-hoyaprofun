@@ -645,18 +645,17 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     pylab.legend()
     pylab.savefig(outfile)
 
-def run_cafa6_eval(CONFIG,filename):
+def run_cafa6_eval(CONFIG,*filenames,outdir='submissions'):
     gt = load_ground_truth(CONFIG,ancestors=False) 
     obo_file = getfile("go-basic.obo")
     ia_file =  getfile("IA.tsv")
     train_gt = load_train_terms_ground_truth(CONFIG,ancestors=False) 
 
-    base = filename.rsplit('.',1)[0]
-    shutil.rmtree(base)
-    os.makedirs(base)
-    shutil.copy(filename,base+'/submission.tsv')
-    gt_file = 'ground_truth.tsv'
+    if os.path.isdir(outdir):                                                                      
+        shutil.rmtree(outdir)                                                                      
+    os.makedirs(outdir)
 
+    gt_file = 'ground_truth.tsv'
     with open(gt_file,'wt') as wh:
         for pracc,goacc in sorted(gt-train_gt): # remove all train terms
             print("\t".join([pracc,goacc]),file=wh)
@@ -673,9 +672,167 @@ def run_cafa6_eval(CONFIG,filename):
     root_handler = root_logger.handlers[0]
     root_handler.setFormatter(log_formatter)
     
-    df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=base, gt_file=gt_file,
+    for f in filenames:                                                                                   
+        shutil.copy(f,outdir+'/'+f)
+    th_step = 0.01
+    df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=outdir, 
+                             gt_file=gt_file,
                              ia=ia_file, exclude=exclude_file, 
-                             max_terms=1500, th_step=0.01, n_cpu=1)
-    write_results(df, dfs_best, out_dir=base, th_step=0.01)
-    # print(df)
-    # print(dfs_best)
+                             max_terms=1500, th_step=th_step, 
+                             n_cpu=1)
+    write_results(df, dfs_best, out_dir=outdir, th_step=th_step)
+
+def cafa6_plots(CONFIG,evaldir='submissions'):
+    # Input files
+    df_file = evaldir+"/"+"evaluation_all.tsv"
+    out_folder = evaldir
+
+    # Set to None if you don't want to use it. Results will not be grouped/filtered by team
+    names_file = None
+
+    # Cumulate the last column of the cols variable, e.g. "pr" --> precision, so that the curves are monotonic as in CAFA
+    cumulate = True
+
+    # Add extreme points to the precision-recall curves (0, 1) and (1, 0)
+    add_extreme_points = True
+
+    # Methods with coverage below this threshold will not be plotted
+    coverage_threshold = 0.3
+
+    # Select a metric
+    # metric, cols = ('f', ['rc', 'pr'])
+    metric, cols =  ('f_w', ['rc_w', 'pr_w'])
+    # metric, cols =  ('f_micro', ['rc_micro', 'pr_micro'])
+    # metric, cols =  ('f_micro_w', ['rc_micro_w', 'pr_micro_w'])
+    # metric, cols = ('s_w', ['ru_w', 'mi_w'])
+
+    # Map column names to full names (for axis labels)
+    axis_title_dict = {'pr': 'Precision', 'rc': 'Recall', 'f': 'F-score', 'pr_w': 'Weighted Precision', 'rc_w': 'Weighted Recall', 'f_w': 'Weighted F-score', 'mi': 'Misinformation (Unweighted)', 'ru': 'Remaining Uncertainty (Unweighted)', 'mi_w': 'Misinformation', 'ru_w': 'Remaining Uncertainty', 's': 'S-score', 'pr_micro': 'Precision (Micro)', 'rc_micro': 'Recall (Micro)', 'f_micro': 'F-score (Micro)', 'pr_micro_w': 'Weighted Precision (Micro)', 'rc_micro_w': 'Weighted Recall (Micro)', 'f_micro_w': 'Weighted F-score (Micro)'}
+
+    # Map ontology namespaces to full names (for plot titles)
+    ontology_dict = {'biological_process': 'BPO', 'molecular_function': 'MFO', 'cellular_component': 'CCO'}
+
+    df = pd.read_csv(df_file, sep="\t")
+
+    # Set method information (optional)
+    if names_file is None:
+        df['group'] = df['filename']
+        df['label'] = df['filename']
+        df['is_baseline'] = False
+    else:
+        methods = pd.read_csv(names_file, delim_whitespace=True, header=0)
+        df = pd.merge(df, methods, on='filename', how='left')
+        df['group'].fillna(df['filename'], inplace=True)
+        df['label'].fillna(df['filename'], inplace=True)
+        if 'is_baseline' not in df:
+            df['is_baseline'] = False
+        else:
+            df['is_baseline'].fillna(False, inplace=True)
+        # print(methods)
+    df = df.drop(columns='filename').set_index(['group', 'label', 'ns', 'tau'])
+
+    # Filter by coverage
+    df = df[df['cov'] >= coverage_threshold]
+
+    # Assign colors based on group
+    cmap = plt.get_cmap('tab20')
+    df['colors'] = df.index.get_level_values('group')
+    df['colors'] = pd.factorize(df['colors'])[0]
+    df['colors'] = df['colors'].apply(lambda x: cmap.colors[x % len(cmap.colors)])
+
+    # Identify the best methods and thresholds
+    index_best = df.groupby(level=['group', 'ns'])[metric].idxmax() if metric in ['f', 'f_w', 'f_micro', 'f_micro_w'] else df.groupby(['group', 'ns'])[metric].idxmin()
+    
+    # Filter the dataframe for the best methods
+    df_methods = df.reset_index('tau').loc[[ele[:-1] for ele in index_best], ['tau', 'cov', 'colors'] + cols + [metric]].sort_index()
+
+    # Makes the curves monotonic. Cumulative max on the last column of the cols variable, e.g. "pr" --> precision
+    if cumulate:
+        if metric in ['f', 'f_w', 'f_micro', 'f_micro_w']:
+            df_methods[cols[-1]] = df_methods.groupby(level=['label', 'ns'])[cols[-1]].cummax()
+        else:
+            df_methods[cols[-1]] = df_methods.groupby(level=['label', 'ns'])[cols[-1]].cummin()
+
+
+    # Save to file
+    df_methods.drop(columns=['colors']).to_csv('{}/fig_{}.tsv'.format(out_folder, metric), float_format="%.3f", sep="\t")
+
+    # Add first last points to precision and recall curves to improve APS calculation
+    def add_points(df_):
+        df_ = pd.concat([df_.iloc[0:1], df_])
+        df_.iloc[0, df_.columns.get_indexer(['tau', cols[0], cols[1]])] = [0, 1, 0]  # tau, rc, pr
+        df_ = pd.concat([df_, df_.iloc[-1:]])
+        df_.iloc[-1, df_.columns.get_indexer(['tau', cols[0], cols[1]])] = [1.1, 0, 1]
+        return df_
+
+    if metric.startswith('f') and add_extreme_points:
+        df_methods = df_methods.reset_index().groupby(['group', 'label', 'ns'], as_index=False).apply(add_points).set_index(['group', 'label', 'ns'])
+
+    # Filter the dataframe for the best method and threshold
+    df_best = df.loc[index_best, ['cov', 'colors'] + cols + [metric]]
+
+    # Calculate average precision score 
+    if metric.startswith('f'):
+        df_best['aps'] = df_methods.groupby(level=['group', 'label', 'ns'])[[cols[0], cols[1]]].apply(lambda x: (x[cols[0]].diff(-1).shift(1) * x[cols[1]]).sum())
+
+    # Calculate the max coverage across all thresholds
+    df_best['max_cov'] = df_methods.groupby(level=['group', 'label', 'ns'])['cov'].max()
+
+    # Set a label column for the plot legend
+    df_best['label'] = df_best.index.get_level_values('label')
+    if 'aps' not in df_best.columns:
+        df_best['label'] = df_best.agg(lambda x: f"{x['label']} ({metric.upper()}={x[metric]:.3f} C={x['max_cov']:.3f})", axis=1)
+    else:
+        df_best['label'] = df_best.agg(lambda x: f"{x['label']} ({metric.upper()}={x[metric]:.3f} APS={x['aps']:.3f} C={x['max_cov']:.3f})", axis=1)
+
+    # Generate the figures
+    plt.rcParams.update({'font.size': 22, 'legend.fontsize': 18})
+
+    # F-score contour lines
+    x = np.arange(0.01, 1, 0.01)
+    y = np.arange(0.01, 1, 0.01)
+    X, Y = np.meshgrid(x, y)
+    Z = 2 * X * Y / (X + Y)
+
+    for ns, df_g in df_best.groupby(level='ns'):
+        fig, ax = plt.subplots(figsize=(15, 15))
+
+        # Contour lines. At the moment they are provided only for the F-score
+        if metric.startswith('f'):
+            CS = ax.contour(X, Y, Z, np.arange(0.1, 1.0, 0.1), colors='gray')
+            ax.clabel(CS, inline=True) #, fontsize=10)
+
+        # Iterate methods
+        for i, (index, row) in enumerate(df_g.sort_values(by=[metric, 'max_cov'], ascending=[False if metric.startswith('f') else True, False]).iterrows()):
+            data = df_methods.loc[index[:-1]]
+            
+            # Precision-recall or mi-ru curves
+            ax.plot(data[cols[0]], data[cols[1]], color=row['colors'], label=row['label'], lw=2, zorder=500-i)
+            
+            # F-max or S-min dots
+            ax.plot(row[cols[0]], row[cols[1]], color=row['colors'], marker='o', markersize=12, mfc='none', zorder=1000-i)
+            ax.plot(row[cols[0]], row[cols[1]], color=row['colors'], marker='o', markersize=6, zorder=1000-i)
+
+        # Set axes limit
+        if metric.startswith('f'):
+            plt.xlim(0, 1)
+            plt.ylim(0, 1)
+    
+        # plt.xlim(0, max(1, df_best.loc[:,:,ns,:][cols[0]].max()))
+        # plt.ylim(0, max(1, df_best.loc[:,:,ns,:][cols[1]].max()))
+
+        # Set titles
+        ax.set_title(ontology_dict.get(ns, ns), pad=20)
+        ax.set_xlabel(axis_title_dict[cols[0]], labelpad=20)
+        ax.set_ylabel(axis_title_dict[cols[1]], labelpad=20)
+        
+        # Legend
+        # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        leg = ax.legend(markerscale=6)
+        for legobj in leg.get_lines():
+            legobj.set_linewidth(10.0)
+
+        # Save figure on disk
+        plt.savefig("{}/fig_{}_{}.png".format(out_folder, metric, ns), bbox_inches='tight', dpi=300, transparent=True)
+        # plt.clf()
+
