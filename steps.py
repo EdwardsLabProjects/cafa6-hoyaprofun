@@ -735,7 +735,7 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
     df = df[df['cov'] >= coverage_threshold]
 
     # Assign colors based on group
-    cmap = plt.get_cmap('tab20')
+    cmap = pylab.get_cmap('tab20')
     df['colors'] = df.index.get_level_values('group')
     df['colors'] = pd.factorize(df['colors'])[0]
     df['colors'] = df['colors'].apply(lambda x: cmap.colors[x % len(cmap.colors)])
@@ -786,7 +786,7 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
         df_best['label'] = df_best.agg(lambda x: f"{x['label']} ({metric.upper()}={x[metric]:.3f} APS={x['aps']:.3f} C={x['max_cov']:.3f})", axis=1)
 
     # Generate the figures
-    plt.rcParams.update({'font.size': 22, 'legend.fontsize': 18})
+    pylab.rcParams.update({'font.size': 22, 'legend.fontsize': 18})
 
     # F-score contour lines
     x = np.arange(0.01, 1, 0.01)
@@ -795,7 +795,7 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
     Z = 2 * X * Y / (X + Y)
 
     for ns, df_g in df_best.groupby(level='ns'):
-        fig, ax = plt.subplots(figsize=(15, 15))
+        fig, ax = pylab.subplots(figsize=(15, 15))
 
         # Contour lines. At the moment they are provided only for the F-score
         if metric.startswith('f'):
@@ -815,11 +815,11 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
 
         # Set axes limit
         if metric.startswith('f'):
-            plt.xlim(0, 1)
-            plt.ylim(0, 1)
+            pylab.xlim(0, 1)
+            pylab.ylim(0, 1)
     
-        # plt.xlim(0, max(1, df_best.loc[:,:,ns,:][cols[0]].max()))
-        # plt.ylim(0, max(1, df_best.loc[:,:,ns,:][cols[1]].max()))
+        # pylab.xlim(0, max(1, df_best.loc[:,:,ns,:][cols[0]].max()))
+        # pylab.ylim(0, max(1, df_best.loc[:,:,ns,:][cols[1]].max()))
 
         # Set titles
         ax.set_title(ontology_dict.get(ns, ns), pad=20)
@@ -833,6 +833,6 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
             legobj.set_linewidth(10.0)
 
         # Save figure on disk
-        plt.savefig("{}/fig_{}_{}.png".format(out_folder, metric, ns), bbox_inches='tight', dpi=300, transparent=True)
-        # plt.clf()
+        pylab.savefig("{}/fig_{}_{}.png".format(out_folder, metric, ns), bbox_inches='tight', dpi=300, transparent=True)
+        # pylab.clf()
 
