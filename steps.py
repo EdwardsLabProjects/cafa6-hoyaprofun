@@ -836,3 +836,4 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
         pylab.savefig("{}/fig_{}_{}.png".format(out_folder, metric, ns), bbox_inches='tight', dpi=300, transparent=True)
         # pylab.clf()
 
+        print(ns," ".join(list(df_g['f_w'])),sum(df_g['f_w'])
