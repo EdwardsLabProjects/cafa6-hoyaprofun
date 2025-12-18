@@ -454,9 +454,11 @@ def train_model(CONFIG,train_loader,val_loader):
             best_val_loss = val_loss_avg
             print(f"Epoch {epoch+1}: Train={train_loss_avg:.4f}, Val={val_loss_avg:.4f} * NEW BEST")
             best_weights = model.state_dict()
+            best_weights_from = (epoch+1,train_loss_avg,best_val_loss)
         else:
             print(f"Epoch {epoch+1}: Train={train_loss_avg:.4f}, Val={val_loss_avg:.4f}")
 
+    print(f"Setting model to best weights - Epoch {best_weights_from[0]}: Train={best_weights_from[1]:.4f} Val={best_weights_from[0]:.4f}")
     model.load_state_dict(best_weights)            
     return model
 
