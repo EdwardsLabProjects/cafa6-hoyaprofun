@@ -8,19 +8,19 @@ def download(dropbox,filename,size,hash):
     tofile = cache + "/" + filename
     os.makedirs(cache,exist_ok=True)
     if not os.path.exists(tofile):
-        print("Downloading %s... "%(filename,),end="")
+        print("Downloading %s... "%(filename,),end="",file=sys.stderr)
         sys.stdout.flush()
         urllib.request.urlretrieve(base+"/"+dropbox+"/"+filename,tofile)
         md5 = hashlib.md5(open(tofile,'rb').read()).hexdigest().lower()
         assert (size == os.path.getsize(tofile)) and (md5 == hash)
-        print("done.")
+        print("done.",file=sys.stderr)
     else:
         md5 = hashlib.md5(open(tofile,'rb').read()).hexdigest().lower()
         if (size != os.path.getsize(tofile)) or (md5 !=  hash):
             os.unlink(tofile)
             return download(dropbox,filename,size,hash)
         else:
-            print("Using cached file %s. "%(filename,))
+            print("Using cached file %s. "%(filename,),file=sys.stderr)
     return tofile
 
 def file_catalog():
@@ -32,7 +32,7 @@ def file_catalog():
 
 def getfile(filename):
     if os.path.exists(filename):
-        print("Using local file %s. "%(filename,))
+        print("Using local file %s. "%(filename,),file=sys.stderr)
         return filename
     assert filename in catalog
     data = catalog[filename]
