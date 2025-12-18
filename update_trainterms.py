@@ -5,7 +5,7 @@ import steps
 
 CONFIG = steps.configuration(sys.argv[1:])
 
-result_file = CONFIG["RESULT"]
+result_file = getfile(CONFIG["RESULT"])
 df = steps.read_submission(result_file)
 train_terms = steps.load_train_terms_ground_truth(CONFIG)
 go = steps.load_ontology(CONFIG)

@@ -31,7 +31,7 @@ def configuration(args):
     for i in range(1,len(args),2):
         CONFIG[args[i]] = eval(args[i+1])
 
-    print("Random seed:",CONFIG['RANDOM_SEED'])
+    print("Random seed:",CONFIG['RANDOM_SEED'],file=sys.stderr)
     np.random.seed(CONFIG['RANDOM_SEED'])
     torch.manual_seed(CONFIG['RANDOM_SEED'])
     if torch.cuda.is_available():
@@ -40,7 +40,7 @@ def configuration(args):
     # configure GPU if available....
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     CONFIG['device'] = device
-    print("Device:",device)
+    print("Device:",device,file=sys.stderr)
 
     return CONFIG
 
