@@ -501,13 +501,13 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                         for ti in t0.superclasses(with_self=False):
                             if term_probs[term] > term_probs.get(ti.id,0.0):
                                 term_probs[ti.id] = term_probs[term]
-
+                    lines = ""
                     for term,prob in term_probs.items():
                         if prob <= 0.0:
                             continue
-                        line = f"{pid}\t{term}\t{min(prob, 0.999):.3f}\n"
-                        f.write(line)
+                        lines += f"{pid}\t{term}\t{min(prob, 0.999):.3f}\n"
                         n_predictions += 1
+                    f.write(lines)
                 
                 del X_batch, outputs, logits, batch_ids
 
