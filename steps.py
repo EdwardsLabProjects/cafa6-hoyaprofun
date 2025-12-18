@@ -501,7 +501,7 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                         for ti in t0.superclasses(with_self=False):
                             if term_probs[term] > term_probs.get(ti.id,0.0):
                                 term_probs[ti.id] = term_probs[term]
-                                
+
                     lines = ""
                     for term,prob in term_probs.items():
                         if prob <= 0.0:
@@ -650,7 +650,9 @@ def write_precall_plot(CONFIG,ground_truth,*filenames,ignore=None,outfile=None):
     pylab.legend()
     pylab.savefig(outfile)
 
-def run_cafa6_eval(CONFIG,*filenames,outdir='submissions'):
+def run_cafa6_eval(CONFIG,*filenames,outdir=None):
+    if outdir is None:
+        outdir = CONFIG['EVAL_OUTDIR']
     gt = load_ground_truth(CONFIG,ancestors=False) 
     obo_file = getfile("go-basic.obo")
     ia_file =  getfile("IA.tsv")
@@ -660,12 +662,12 @@ def run_cafa6_eval(CONFIG,*filenames,outdir='submissions'):
         shutil.rmtree(outdir)                                                                      
     os.makedirs(outdir)
 
-    gt_file = 'ground_truth.tsv'
+    gt_file = CONFIG["EVAL_GROUNDTRUTH"]
     with open(gt_file,'wt') as wh:
         for pracc,goacc in sorted(gt-train_gt): # remove all train terms
             print("\t".join([pracc,goacc]),file=wh)
 
-    exclude_file = 'exclude.tsv' # exclude all train terms
+    exclude_file = CONFIG["EVAL_EXCLUDE"] # exclude all train terms
     with open(exclude_file,'wt') as wh:
         for pracc,goacc in sorted(train_gt):
             print("\t".join([pracc,goacc]),file=wh)
