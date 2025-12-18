@@ -2,6 +2,7 @@
 
 import sys
 import steps
+from util import getfile
 
 CONFIG = steps.configuration(sys.argv[1:])
 
