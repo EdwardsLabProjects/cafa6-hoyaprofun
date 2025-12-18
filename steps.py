@@ -95,7 +95,7 @@ def load_ground_truth(CONFIG,ancestors=True,asset=True):
 def load_go_terms(CONFIG,weights,restriction=None):
     print("\n[1/6] Load protein terms to predict...")
 
-    train_terms_with_anc = getfile("train_terms_with_anc.tsv")
+    train_terms_with_anc = getfile(CONFIG("TRAIN_TERMS"))
 
     # Make Python dictionary of protein accession to list of GO terms
     train_terms_df = pd.read_csv(train_terms_with_anc, sep='\t', 
