@@ -31,6 +31,9 @@ def file_catalog():
     return catalog
 
 def getfile(filename):
+    if os.path.exists(filename):
+        print("Using local file %s. "%(filename,))
+        return filename
     assert filename in catalog
     data = catalog[filename]
     return download(data['dropbox'],filename,data['size'],data['md5'])

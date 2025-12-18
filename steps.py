@@ -28,6 +28,8 @@ def configuration(args):
     config = getconfig(config_filename)
     CONFIG = config["Config"]
     CONFIG.update(config["Files"])
+    for i in range(1,len(args),2):
+        CONFIG[args[i]] = eval(args[i+1])
 
     print("Random seed:",CONFIG['RANDOM_SEED'])
     np.random.seed(CONFIG['RANDOM_SEED'])
@@ -69,9 +71,9 @@ def load_test_ids(CONFIG):
 
 def load_train_terms_ground_truth(CONFIG,ancestors=True,asset=True):
     if ancestors:
-        fn = getfile("train_terms_with_anc.tsv")
+        fn = getfile(CONFIG["TRAIN_TERMS"])
     else:
-        fn = getfile("train_terms.tsv")
+        fn = getfile(CONFIG["TRAIN_TERMS_NOANC"])
     df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1], names=['protein', 'term'])
     if not asset:
         return df
@@ -836,10 +838,12 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
         pylab.savefig("{}/fig_{}_{}.png".format(out_folder, metric, ns), bbox_inches='tight', dpi=300, transparent=True)
         # pylab.clf()
 
-    print(df_best)
-
-    for group, df_group in df_best.groupby(level='group'):
-        fws = df_group.["f_w"].todict()
-        print(fws)
-        print(grp," ".join(map(str,fws))),sum(fws)
-    
+    replace = {"biological_process": "BP", "molecular_function": "MF", "cellular_component": "CC"}
+    df_group = df_group.droplevel(level=1)                                                            
+    df_group.reset_index(inplace=True)                                                                
+    fws = dict(df_group[["ns","f_w"]].itertuples(index=False))                                        
+    print(group,"F_w",end=" ")                                                                
+    for k,v in sorted(fws.items()):                                                                   
+        k = replace.get(k)                                                                            
+        print(f"{k}: {v}",end=" ")                                                                    
+    print("Overall:","%.3f"%(sum(fws.values())/3),)

@@ -1,0 +1,50 @@
+diff --git a/src/cafaeval/evaluation.py b/src/cafaeval/evaluation.py
+index 52433c3..dc490a2 100644
+--- a/src/cafaeval/evaluation.py
++++ b/src/cafaeval/evaluation.py
+@@ -164,18 +164,24 @@ def compute_metrics(pred, gt_matrix, tau_arr, toi, gt_exclude=None, ic_arr=None,
+             n_gt = (count_g * ic_arr[toi]).sum(axis=1)
+ 
+     if gt_exclude is None:
+-        arg_lists = [[tau_arr, g, p, toi, n_gt, ic_arr] for tau_arr in np.array_split(tau_arr, n_cpu)]
+-        with mp.Pool(processes=n_cpu) as pool:
+-            metrics = np.concatenate(pool.starmap(compute_confusion_matrix, arg_lists), axis=0)
++        if n_cpu == 1:
++            metrics = compute_confusion_matrix(tau_arr,g, p, toi, n_gt, ic_arr)
++        else:
++            arg_lists = [[tau_arr, g, p, toi, n_gt, ic_arr] for tau_arr in np.array_split(tau_arr, n_cpu)]
++            with mp.Pool(processes=n_cpu) as pool:
++                metrics = np.concatenate(pool.starmap(compute_confusion_matrix, arg_lists), axis=0)
++            print("Jobs on all CPUs completed.")
+     else:
+-        arg_lists = [[tau_arr, gt_perprotein, pred[gt_matrix[:,toi].sum(1)>0, :], toi_perprotein, n_gt, ic_arr] for tau_arr in np.array_split(tau_arr, n_cpu)]
+-        with mp.Pool(processes=n_cpu) as pool:
+-            metrics = np.concatenate(pool.starmap(compute_confusion_matrix_exclude, arg_lists), axis=0)
++        if n_cpu == 1:
++            metrics = compute_confusion_matrix_exclude(tau_arr, gt_perprotein, pred[gt_matrix[:,toi].sum(1)>0, :], toi_perprotein, n_gt, ic_arr)
++        else:
++            arg_lists = [[tau_arr, gt_perprotein, pred[gt_matrix[:,toi].sum(1)>0, :], toi_perprotein, n_gt, ic_arr] for tau_arr in np.array_split(tau_arr, n_cpu)]
++            with mp.Pool(processes=n_cpu) as pool:
++                metrics = np.concatenate(pool.starmap(compute_confusion_matrix_exclude, arg_lists), axis=0)
++            print("Jobs on all CPUs completed.")
+ 
+-    print("Jobs on all CPUs completed.")
+     return pd.DataFrame(metrics, columns=columns)
+ 
+-
+ def normalize(metrics, ns, tau_arr, ne, normalization):
+ 
+     # Normalize columns
+diff --git a/src/cafaeval/graph.py b/src/cafaeval/graph.py
+index 7f4f1bf..781b474 100644
+--- a/src/cafaeval/graph.py
++++ b/src/cafaeval/graph.py
+@@ -118,7 +118,7 @@ class Graph:
+     def set_ia(self, ia_dict):
+         self.ia = np.zeros(self.idxs, dtype='float')
+         for term_id in self.terms_dict:
+-            if ia_dict.get(term_id):
++            if ia_dict.get(term_id) is not None:
+                 self.ia[self.terms_dict[term_id]['index']] = ia_dict.get(term_id)
+             else:
+                 logging.debug('Missing IA for term: {}'.format(term_id))
