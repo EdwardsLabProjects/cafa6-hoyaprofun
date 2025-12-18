@@ -501,6 +501,7 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                         for ti in t0.superclasses(with_self=False):
                             if term_probs[term] > term_probs.get(ti.id,0.0):
                                 term_probs[ti.id] = term_probs[term]
+                                
                     lines = ""
                     for term,prob in term_probs.items():
                         if prob <= 0.0:
