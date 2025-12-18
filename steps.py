@@ -844,11 +844,12 @@ def cafa6_plots(CONFIG,evaldir='submissions'):
         # pylab.clf()
 
     replace = {"biological_process": "BP", "molecular_function": "MF", "cellular_component": "CC"}
-    df_group = df_group.droplevel(level=1)                                                            
-    df_group.reset_index(inplace=True)                                                                
-    fws = dict(df_group[["ns","f_w"]].itertuples(index=False))                                        
-    print(group,"F_w",end=" ")                                                                
-    for k,v in sorted(fws.items()):                                                                   
-        k = replace.get(k)                                                                            
-        print(f"{k}: {v}",end=" ")                                                                    
-    print("Overall:","%.3f"%(sum(fws.values())/3),)
+    for group, df_group in df_best.groupby(level='group'):
+        df_group = df_group.droplevel(level=1)                                                            
+        df_group.reset_index(inplace=True)                                                                
+        fws = dict(df_group[["ns","f_w"]].itertuples(index=False))                                        
+        print(group,"F_w",end=" ")                                                                
+        for k,v in sorted(fws.items()):                                                                   
+            k = replace.get(k)                                                                            
+            print(f"{k}: {v}",end=" ")                                                                    
+        print("Overall:","%.3f"%(sum(fws.values())/3),)
