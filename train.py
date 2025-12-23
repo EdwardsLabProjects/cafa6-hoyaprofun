@@ -5,7 +5,7 @@ import steps
 
 print("\n[0/6] Load configuration and initial files...")
 
-CONFIG = steps.configuration(sys.argv[1:])
+CONFIG = steps.configuration(sys.argv[1:],withseed=True)
 
 go = steps.load_ontology(CONFIG)
 weights = steps.load_weights(CONFIG)

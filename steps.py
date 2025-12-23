@@ -6,6 +6,7 @@ import csv
 import random
 import gc
 import shutil
+import time
 from collections import Counter
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -23,23 +24,28 @@ import logging
 
 from util import getfile, getconfig
 
-def configuration(args):
+def configuration(args,withseed=False):
     config_filename = ('config.ini' if len(args) < 1 else args[0])
     config = getconfig(config_filename)
     CONFIG = config["Config"]
     CONFIG.update(config["Files"])
     for i in range(1,len(args),2):
-        CONFIG[args[i]] = eval(args[i+1])
+        try:
+            CONFIG[args[i]] = eval(args[i+1])
+        except:
+            CONFIG[args[i]] = args[i+1]
 
-    print("Random seed:",CONFIG['RANDOM_SEED'],file=sys.stderr)
-    np.random.seed(CONFIG['RANDOM_SEED'])
-    torch.manual_seed(CONFIG['RANDOM_SEED'])
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(CONFIG['RANDOM_SEED'])
+    if withseed:
+        print("Random seed:",CONFIG['RANDOM_SEED'],file=sys.stderr)
+        np.random.seed(CONFIG['RANDOM_SEED'])
+        torch.manual_seed(CONFIG['RANDOM_SEED'])
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(CONFIG['RANDOM_SEED'])
 
     # configure GPU if available....
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     CONFIG['device'] = device
+    CONFIG['is_cuda'] =  torch.cuda.is_available()
     print("Device:",device,file=sys.stderr)
 
     return CONFIG
@@ -71,9 +77,9 @@ def load_test_ids(CONFIG):
 
 def load_train_terms_ground_truth(CONFIG,ancestors=True,asset=True):
     if ancestors:
-        fn = getfile(CONFIG["TRAIN_TERMS"])
+        fn = getfile(CONFIG["TRAIN_TERMS"],"Train terms with ancestors ground truth")
     else:
-        fn = getfile(CONFIG["TRAIN_TERMS_NOANC"])
+        fn = getfile(CONFIG["TRAIN_TERMS_NOANC"],"Train terms (no ancestors) ground truth")
     df = pd.read_csv(fn, sep='\t', header=0, usecols=[0,1], names=['protein', 'term'])
     if not asset:
         return df
@@ -81,10 +87,10 @@ def load_train_terms_ground_truth(CONFIG,ancestors=True,asset=True):
 
 def load_ground_truth(CONFIG,ancestors=True,asset=True):
     if ancestors:
-        fn = getfile(CONFIG["GROUND_TRUTH"])
+        fn = getfile(CONFIG["GROUND_TRUTH"],"Ground truth with ancestors")
         df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,4], names=['protein', 'term','exp'])
     else:
-        fn = getfile(CONFIG["GROUND_TRUTH_NOANC"])
+        fn = getfile(CONFIG["GROUND_TRUTH_NOANC"],"Ground truth (no ancestors)")
         df = pd.read_csv(fn, sep='\t', header=None, usecols=[0,1,6], names=['protein', 'term','exp'])
     df = df[df.exp == 'EXP']
     df = df[['protein','term']]
@@ -95,7 +101,7 @@ def load_ground_truth(CONFIG,ancestors=True,asset=True):
 def load_go_terms(CONFIG,weights,restriction=None):
     print("\n[1/6] Load protein terms to predict...")
 
-    train_terms_with_anc = getfile(CONFIG["TRAIN_TERMS"])
+    train_terms_with_anc = getfile(CONFIG["TRAIN_TERMS"],"Train terms to predict")
 
     # Make Python dictionary of protein accession to list of GO terms
     train_terms_df = pd.read_csv(train_terms_with_anc, sep='\t', 
@@ -138,7 +144,7 @@ def load_goa_terms(CONFIG,train_ids):
     print("\n[2/6] Load goa terms...")
 
     # Make Python dictionary of protein accession to list of GOA terms
-    goa_uniprot_test_with_anc = getfile(CONFIG["GOA_INPUT"])
+    goa_uniprot_test_with_anc = getfile(CONFIG["GOA_INPUT"],"GOA terms for input")
     goa_terms_df = pd.read_csv(goa_uniprot_test_with_anc, sep='\t', 
                                header=None, usecols=[0,1,2], 
                                names=['protein', 'term', 'evidence'])
@@ -175,7 +181,7 @@ def load_taxids(CONFIG,train_ids):
     print("\n[3/6] Load taxids...")
 
     # all train proteins are found in test...
-    testsuperset = getfile("testsuperset.fasta")
+    testsuperset = getfile("testsuperset.fasta","Taxa for all accessions")
     protein_to_taxa = dict()
     for l in open(testsuperset):
         if not l.startswith('>'):
@@ -183,7 +189,7 @@ def load_taxids(CONFIG,train_ids):
         pracc,taxid = l[1:].split()
         protein_to_taxa[pracc] = int(taxid)
 
-    taxa_cafa6_test_with_ranks = getfile("taxa_cafa6_test_with_ranks.tsv")
+    taxa_cafa6_test_with_ranks = getfile("taxa_cafa6_test_with_ranks.tsv","Taxa ranks")
     taxa_to_ranks = pd.read_csv(taxa_cafa6_test_with_ranks, sep='\t')[['taxid','rank','rank_taxid']]
     taxa_to_ranks = taxa_to_ranks.groupby('taxid')['rank_taxid'].apply(list).to_dict()
 
@@ -223,8 +229,8 @@ def load_protein_embeddings(CONFIG):
 
     print("\n[4/6] Loading ProtT5 embeddings...")
 
-    sprot_t5_cafa6_test_ids = getfile("sprot_t5_cafa6_test_ids.npy")
-    sprot_t5_cafa6_test_embeds = getfile("sprot_t5_cafa6_test_embeds.npy")
+    sprot_t5_cafa6_test_ids = getfile("sprot_t5_cafa6_test_ids.npy","Protein sequence embedding")
+    sprot_t5_cafa6_test_embeds = getfile("sprot_t5_cafa6_test_embeds.npy","Protein sequence embedding")
     
     test_ids = np.load(sprot_t5_cafa6_test_ids)
     test_embeds = np.load(sprot_t5_cafa6_test_embeds)
@@ -331,21 +337,22 @@ def prepare_data_loaders(CONFIG, **kwargs):
         train_dataset, 
         batch_size=CONFIG['BATCH_SIZE'], 
         shuffle=True,
-        pin_memory=(CONFIG['device'] == 'cuda') 
+        pin_memory=(CONFIG['is_cuda']),
+        drop_last=True
     )
 
     val_loader = DataLoader(
         val_dataset, 
         batch_size=CONFIG['PREDICT_BATCH_SIZE'], 
         shuffle=False,
-        pin_memory=(CONFIG['device'] == 'cuda')
+        pin_memory=(CONFIG['is_cuda'])
     )
 
     data_loader = DataLoader(
         valid_dataset,
         batch_size=CONFIG['PREDICT_BATCH_SIZE'],
         shuffle=False,
-        pin_memory=(CONFIG['device'] == 'cuda')
+        pin_memory=(CONFIG['is_cuda'])
     )
 
     return train_loader, val_loader, data_loader
@@ -387,7 +394,7 @@ def train_model(CONFIG,train_loader,val_loader):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=CONFIG['LEARNING_RATE'], weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
-    scaler = torch.amp.GradScaler() if CONFIG['device'] == 'cuda' else None
+    scaler = torch.amp.GradScaler() if CONFIG['is_cuda'] else None
 
     best_val_loss = float('inf')
     best_weights = None
@@ -401,10 +408,10 @@ def train_model(CONFIG,train_loader,val_loader):
             # Non-blocking transfer allows overlap with computation
             X_batch = X_batch.to(CONFIG['device'], non_blocking=True)
             y_batch = y_batch.to(CONFIG['device'], non_blocking=True)
-            
+
             optimizer.zero_grad(set_to_none=True)
 
-            if CONFIG['device'] == 'cuda':
+            if CONFIG['is_cuda']:
                 with torch.amp.autocast('cuda'):
                     outputs = model(X_batch)
                     loss = criterion(outputs, y_batch)
@@ -434,7 +441,7 @@ def train_model(CONFIG,train_loader,val_loader):
                 X_batch = X_batch.to(CONFIG['device'], non_blocking=True)
                 y_batch = y_batch.to(CONFIG['device'], non_blocking=True)
                 
-                if CONFIG['device'] == 'cuda':
+                if CONFIG['is_cuda']:
                     with torch.amp.autocast('cuda'):
                         outputs = model(X_batch)
                         loss = criterion(outputs, y_batch)
@@ -473,12 +480,19 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
 
     model.eval()
 
+    print_progress = False
+    if not sys.stderr.isatty():
+        print_progress = True
+        total = len(data_loader)
+
     n_predictions = 0
     with open(filename, 'w', newline='') as f:
         with torch.no_grad():
-            for batch_ids, X_batch in tqdm(data_loader, desc="Predicting", total=len(data_loader), ascii=True):
+            iteration = 0
+            next_progress = 0
+            for batch_ids, X_batch in tqdm(data_loader, desc="Predicting", total=len(data_loader), ascii=True, disable=None):
                 X_batch = X_batch.to(CONFIG['device'], non_blocking=True)
-                if CONFIG['device'] == 'cuda':
+                if CONFIG['is_cuda']:
                     with torch.amp.autocast('cuda'):
                         logits = model(X_batch)
                 else:
@@ -511,6 +525,13 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                     f.write(lines)
                 
                 del X_batch, outputs, logits, batch_ids
+                iteration += 1
+                if print_progress and (next_progress < time.time()):
+                    tqdm.write("Progress: %d/%d."%(iteration,total),file=sys.stderr)
+                    next_progress = (time.time() + 15)
+
+            if print_progress:
+                tqdm.write("Progress: %d/%d."%(iteration,total),file=sys.stderr)
 
     print(f">> Generated {n_predictions:,} predictions")
     return filename
@@ -518,7 +539,7 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
 def write_goa_preds(CONFIG,filename=None):
     if filename is None:
         filename = CONFIG["GOA_RESULT"]
-    goa_pred_file = getfile(CONFIG["GOA_MERGE"])
+    goa_pred_file = getfile(CONFIG["GOA_MERGE"],"GOA terms for merging")
     chunks = []
     for chunk in pd.read_csv(goa_pred_file,
                              header=None, sep='\t', 
@@ -585,7 +606,7 @@ def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
     ensemble_df = ensemble_df.sort_values(['Id', 'Confidence'], ascending=[True, False])
     ensemble_df = ensemble_df.groupby('Id').head(1500)
   
-    ensemble_df.to_csv('submission.tsv', sep='\t', header=False, index=False,
+    ensemble_df.to_csv(pred_file, sep='\t', header=False, index=False,
                        quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
                        float_format="%.3f")
     print(f">> Saved {len(ensemble_df):,} predictions")
@@ -680,7 +701,7 @@ def run_cafa6_eval(CONFIG,*filenames,outdir=None):
     root_handler.setFormatter(log_formatter)
     
     for f in filenames:                                                                                   
-        shutil.copy(f,outdir+'/'+f)
+        shutil.copy(f,outdir+'/'+os.path.split(f)[1])
     th_step = 0.01
     df, dfs_best = cafa_eval(obo_file=obo_file, pred_dir=outdir, 
                              gt_file=gt_file,
@@ -689,7 +710,9 @@ def run_cafa6_eval(CONFIG,*filenames,outdir=None):
                              n_cpu=1)
     write_results(df, dfs_best, out_dir=outdir, th_step=th_step)
 
-def cafa6_plots(CONFIG,evaldir='submissions'):
+def cafa6_plots(CONFIG,evaldir=None):
+    if evaldir is None:
+        evaldir = CONFIG['EVAL_OUTDIR']
     # Input files
     df_file = evaldir+"/"+"evaluation_all.tsv"
     out_folder = evaldir
