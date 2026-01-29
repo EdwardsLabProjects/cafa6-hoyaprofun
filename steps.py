@@ -7,7 +7,8 @@ import random
 import gc
 import shutil
 import time
-from collections import Counter
+import glob
+from collections import Counter, defaultdict
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
@@ -16,7 +17,7 @@ from pronto import Ontology
 import numpy as np
 import pandas as pd
 import pylab
-from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.preprocessing import OneHotEncoder,MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from tqdm.auto import tqdm
 from cafaeval.evaluation import cafa_eval, write_results
@@ -55,6 +56,10 @@ def load_weights(CONFIG):
     weights = pd.read_csv(iafile, sep='\t', header=None, 
                           names=['term','weight']).set_index("term")
     return weights['weight'].to_dict()
+
+def load_newterms(CONFIG):
+    filename = getfile("new_terms.226-229_with_anc.txt")
+    return set(open(filename).read().split())
 
 def load_ontology(CONFIG):
     gofile = getfile("go-basic.obo")
@@ -139,7 +144,75 @@ def load_go_terms(CONFIG,weights,restriction=None):
 
     return top_terms,protein_to_terms
 
-def load_goa_terms(CONFIG,train_ids):
+def load_train_go_terms(CONFIG,weights,restriction=None,ontology=None):
+    print("\n[1/6] Load protein terms to predict...")
+
+    train_terms_with_anc = getfile(CONFIG["TRAIN_TERMS"],"Train terms to predict")
+
+    # Make Python dictionary of protein accession to list of GO terms
+    train_terms_df = pd.read_csv(train_terms_with_anc, sep='\t', 
+                                 header=0, names=['protein', 'term', 'ontology'])
+    if ontology:
+        train_terms_df = train_terms_df[train_terms_df['ontology']==ontology]
+    protein_to_terms = train_terms_df.groupby('protein')['term'].apply(list).to_dict()
+    term_to_proteins = train_terms_df.groupby('term')['protein'].apply(list).to_dict()
+
+    # Compute most frequently used GO terms
+    term_counts = Counter()
+    for terms in protein_to_terms.values():
+        term_counts.update(terms)
+    nprotterm = sum(term_counts.values())
+    nprot = len(protein_to_terms)
+
+    mintermcnt = CONFIG['MIN_TERM_COUNT']
+    assert 0 <= mintermcnt < nprot
+    if 0 < mintermcnt < 1:
+        mintermcnt *= nprot
+    maxtermcnt = CONFIG['MAX_TERM_COUNT']
+    assert 0 < mintermcnt <= nprot
+    if 0 < maxtermcnt <= 1:
+        maxtermcnt *= nprot
+    # print(mintermcnt,maxtermcnt)
+    minwt = CONFIG['MIN_TERM_WEIGHT']
+
+    # Top terms by weighted frequency...
+    top_terms = [ t[0] for t in sorted(term_counts.items(),
+                                       key=lambda t: weights.get(t[0],0.0)*t[1],
+                                       reverse=True) 
+                  if mintermcnt <= t[1] <= maxtermcnt and weights.get(t[0],0.0) >= minwt ]
+    if restriction is not None:
+        top_terms = [ t for t in top_terms if t not in restriction ]
+    nterms = len(top_terms)
+    # top_terms = top_terms[:CONFIG['TOP_K_TERM_LABELS']]
+
+    term_to_idx = {term: idx for idx, term in enumerate(top_terms)}
+
+    # and restrict protein_to_terms dictionary to only those k terms.
+    for protein in protein_to_terms:
+        protein_to_terms[protein] = [ term_to_idx[t] for t in protein_to_terms[protein] if t in term_to_idx ]
+
+    # print(term_to_proteins)
+
+    term_to_proteins1 = {}
+    for term in top_terms:
+        # print(term,term_to_idx[term])
+        # print(set(term_to_proteins[term]))
+        term_to_proteins1[term_to_idx[term]] = set(term_to_proteins[term])
+
+    # for k,v in term_to_proteins1.items():
+    #     print(k,len(v),v)
+
+    ntopprotterm = 0
+    for pr in protein_to_terms:
+        ntopprotterm += len(protein_to_terms[pr]) 
+
+    print(f">> {len(protein_to_terms)} training proteins, {len(top_terms)} terms selected from {nterms} terms,")
+    print(f">> {ntopprotterm} protein-term pairs selected from {nprotterm} protein-term pairs.")
+
+    return top_terms,protein_to_terms,term_to_proteins1
+
+
+def load_goa_terms(CONFIG,train_ids,train_terms):
 
     print("\n[2/6] Load goa terms...")
 
@@ -158,7 +231,8 @@ def load_goa_terms(CONFIG,train_ids):
 
     nprotgoaterms = sum(term_counts.values())
     ngoaterms = len(term_counts)
-    top_goaterms = [ t[0] for t in term_counts.most_common()[:CONFIG['TOP_K_GOATERMS']] ]
+    top_goaterms = (train_terms + [ t[0] for t in term_counts.most_common() if t[0] not in set(train_terms)])[:CONFIG['TOP_K_GOATERMS']]
+    top_goaterms = sorted(top_goaterms,key=lambda t: term_counts[t])
 
     goaterm_to_idx = {term: idx for idx, term in enumerate(top_goaterms)}
 
@@ -344,6 +418,122 @@ def prepare_data_loaders(CONFIG, **kwargs):
     val_loader = DataLoader(
         val_dataset, 
         batch_size=CONFIG['PREDICT_BATCH_SIZE'], 
+        shuffle=False,
+        pin_memory=(CONFIG['is_cuda'])
+    )
+
+    data_loader = DataLoader(
+        valid_dataset,
+        batch_size=CONFIG['PREDICT_BATCH_SIZE'],
+        shuffle=False,
+        pin_memory=(CONFIG['is_cuda'])
+    )
+
+    return train_loader, val_loader, data_loader
+
+def prepare_data_loaders2(CONFIG, **kwargs):
+
+    print("\n[5/6] Preparing data...")
+
+    ntaxid,protein_to_taxid = kwargs['taxid']
+    embed_dim,protein_to_embed = kwargs['embed']
+    ngoaterm,protein_to_goaterm = kwargs['goaterm']
+
+    valid_proteins = set(protein_to_goaterm)
+    valid_proteins &= set(protein_to_taxid)
+    valid_proteins &= set(protein_to_embed)
+           
+    mlb = MultiLabelBinarizer(classes=range(ntaxid))
+    tax_labels = [ protein_to_taxid.get(p, []) for p in valid_proteins ]
+    tax_encoded = mlb.fit_transform(tax_labels)
+    tax_dict = dict(zip(valid_proteins,tax_encoded))
+
+    mlb = MultiLabelBinarizer(classes=range(ngoaterm))
+    goaterm_labels = [ protein_to_goaterm.get(p, []) for p in valid_proteins ]
+    goaterm_encoded = mlb.fit_transform(goaterm_labels)
+    goaterm_dict = dict(zip(valid_proteins,goaterm_encoded))
+
+    data_dict = dict()
+    for pr in valid_proteins:
+        data_dict[pr] = np.concatenate([protein_to_embed[pr],
+                                        tax_dict[pr],
+                                        goaterm_dict[pr]],
+                                       axis=0)
+    
+    inputdim = embed_dim + ntaxid + ngoaterm
+
+    return inputdim,data_dict
+
+def prepare_data_loaders1(CONFIG, train_ids, class1_ids, **kwargs):
+
+    print("\n[5/6] Preparing training data...")
+
+    input_dim,data_dict = kwargs['data']
+
+    valid_train_proteins = train_ids
+    valid_train_proteins &= set(data_dict)
+    
+    class1_ids &= valid_train_proteins
+    if len(class1_ids) > CONFIG['MAX_TERM_PROT_TRAIN']:
+        class1_ids = set(random.sample(list(class1_ids),CONFIG['MAX_TERM_PROT_TRAIN']))
+    class0_ids = valid_train_proteins - class1_ids
+    class0_ids = random.sample(list(class0_ids),len(class1_ids))
+    all_ids = list(class1_ids) + list(class0_ids)
+  
+    y_encoded = np.concatenate([np.ones((len(class1_ids),1)),
+                                np.zeros((len(class0_ids),1))],
+                                axis=0)
+
+    trids, valids, y_train, y_val = train_test_split(
+        all_ids, y_encoded, 
+        test_size=CONFIG['TRAIN_VAL_SPLIT'], 
+        random_state=CONFIG['RANDOM_SEED']
+    )
+    print(f">> Train: {len(trids)}, Val: {len(valids)}, InputDim: {input_dim}")
+    CONFIG['input_dim'] = input_dim
+    CONFIG['output_dim'] = 1
+
+    # Make an efficient data-model for training...
+    class ProteinDataset(Dataset):
+        def __init__(self, proteins, feature_dict, labels=None):
+            proteins = list(proteins)
+            self.features = torch.tensor(
+                np.array([feature_dict[p] for p in proteins]), 
+                dtype=torch.float32
+            )
+            self.proteins = proteins
+            self.len = len(proteins)
+            self.labels = None
+            if labels is not None:
+                self.labels = torch.tensor(labels, dtype=torch.float32)
+
+        def __len__(self):
+            return self.len
+
+        def __getitem__(self, idx):
+            # This is now just a fast tensor slice, no dictionary hashing needed
+            if self.labels is not None:
+                return self.features[idx], self.labels[idx]
+            return self.proteins[idx], self.features[idx]
+
+    train_dataset = ProteinDataset(trids, data_dict, y_train)
+    val_dataset = ProteinDataset(valids, data_dict, y_val)
+    valid_dataset = ProteinDataset(list(data_dict), data_dict)
+
+    del y_train, y_val
+    gc.collect()
+
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=CONFIG['BATCH_SIZE'], 
+        shuffle=True,
+        pin_memory=(CONFIG['is_cuda']),
+        drop_last=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=CONFIG['BATCH_SIZE'], 
         shuffle=False,
         pin_memory=(CONFIG['is_cuda'])
     )
@@ -575,12 +765,36 @@ def read_submission(filename,**kwargs):
             gc.collect()
     return pd.concat(chunks, ignore_index=True)
 
-def combine_preds(CONFIG,model_pred_file,goa_pred_file,pred_file=None):
+def read_submissions(fileglob,**kwargs):
+    if 'header' not in kwargs:
+        kwargs['header'] = None
+    if 'names' not in kwargs:
+        kwargs['names'] = ["Id","GO term","Confidence"]
+    chunks = []
+    for filename in glob.glob(fileglob):
+      for chunk in pd.read_csv(filename, sep='\t', chunksize=1000000, **kwargs):
+        chunks.append(chunk)
+        if len(chunks) >= 10:
+            df = pd.concat(chunks, ignore_index=True)
+            chunks = [df]
+            gc.collect()
+    df = pd.concat(chunks, ignore_index=True)
+    colnames = df.columns.tolist()
+    max_value_indices = df.groupby(colnames[0:2])[colnames[2]].idxmax()
+    return df.loc[max_value_indices]
+
+def merge_preds(CONFIG):
+    model_df = read_submissions(CONFIG["MODEL_RESULT"].replace(".tsv","-*.tsv"))
+    model_df.to_csv(CONFIG["MODEL_RESULT"], sep='\t', header=False, index=False,
+                   quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
+                   float_format="%.3f")
+
+def combine_preds(CONFIG,pred_file=None):
 
     if pred_file is None:
         pred_file = CONFIG["RESULT"]
 
-    goa_df = read_submission(CONFIG["GOA_RESULT"])
+    goa_df = read_submissions(CONFIG["GOA_RESULT"])
     goa_df['GOA_Confidence'] = goa_df['Confidence']
     goa_df['Confidence'] = goa_df['Confidence'] * CONFIG['GOA_WEIGHT']
 
