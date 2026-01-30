@@ -676,7 +676,7 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
     model.eval()
 
     n_predictions = 0
-    with open(filename, 'w', newline='') as f:
+    with open(filename, 'a', newline='') as f:
         with torch.no_grad():
             iteration = 0
             next_progress = 0
@@ -765,18 +765,27 @@ def read_submissions(fileglob,*args,**kwargs):
         kwargs['header'] = None
     if 'names' not in kwargs:
         kwargs['names'] = ["Id","GO term","Confidence"]
-    chunks = []
+    filedfs = []
     for filename in list(args) + glob.glob(fileglob):
       if not os.path.exists(filename):
         continue
       print("Reading submission file:",filename)
+      chunks = []
       for chunk in pd.read_csv(filename, sep='\t', chunksize=1000000, **kwargs):
         chunks.append(chunk)
         if len(chunks) >= 10:
-            df = pd.concat(chunks, ignore_index=True)
-            chunks = [df]
+            fdf = pd.concat(chunks, ignore_index=True)
+            chunks = [fdf]
             gc.collect()
-    df = pd.concat(chunks, ignore_index=True)
+      fdf = pd.concat(chunks, ignore_index=True)
+      colnames = fdf.columns.tolist()
+      fdf = fdf.groupby(colnames[0:2],as_index=False)[colnames[2]].mean()
+      filedfs.append(fdf)
+      if len(filedfs) >= 10:
+          df = pd.concat(filedfs, ignore_index=True)
+          filedfs = [df]
+          gc.collect()
+    df = pd.concat(filedfs, ignore_index=True)
     colnames = df.columns.tolist()
     max_value_indices = df.groupby(colnames[0:2])[colnames[2]].idxmax()
     return df.loc[max_value_indices]
