@@ -468,7 +468,7 @@ def prepare_data_loaders1(CONFIG, train_ids, class1_ids, **kwargs):
 
     print("\n[5/6] Preparing training data...")
 
-    input_dim,data_dict = kwargs['data']
+    input_dim,data_dict,data_loader = kwargs['data']
 
     valid_train_proteins = train_ids
     valid_train_proteins &= set(data_dict)
@@ -511,14 +511,15 @@ def prepare_data_loaders1(CONFIG, train_ids, class1_ids, **kwargs):
             return self.len
 
         def __getitem__(self, idx):
-            # This is now just a fast tensor slice, no dictionary hashing needed
             if self.labels is not None:
                 return self.features[idx], self.labels[idx]
+            # This is now just a fast tensor slice, no dictionary hashing needed
             return self.proteins[idx], self.features[idx]
 
     train_dataset = ProteinDataset(trids, data_dict, y_train)
     val_dataset = ProteinDataset(valids, data_dict, y_val)
-    valid_dataset = ProteinDataset(list(data_dict), data_dict)
+    if data_loader is None:
+        valid_dataset = ProteinDataset(list(data_dict), data_dict)
 
     del y_train, y_val
     gc.collect()
@@ -538,12 +539,13 @@ def prepare_data_loaders1(CONFIG, train_ids, class1_ids, **kwargs):
         pin_memory=(CONFIG['is_cuda'])
     )
 
-    data_loader = DataLoader(
-        valid_dataset,
-        batch_size=CONFIG['PREDICT_BATCH_SIZE'],
-        shuffle=False,
-        pin_memory=(CONFIG['is_cuda'])
-    )
+    if data_loader is None:
+        data_loader = DataLoader(
+            valid_dataset,
+            batch_size=CONFIG['PREDICT_BATCH_SIZE'],
+            shuffle=False,
+            pin_memory=(CONFIG['is_cuda'])
+        )
 
     return train_loader, val_loader, data_loader
 
