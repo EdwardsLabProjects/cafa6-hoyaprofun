@@ -32,15 +32,18 @@ resultfiles = CONFIG['MODEL_RESULT'].replace('.tsv',"-*.tsv")
 for fn in glob.glob(resultfiles):
     os.unlink(fn)
 
+data_loader = None
 for gl in range(len(golabels)):
     # Prepare training and testing data loaders
     train_loader, val_loader, data_loader = \
         steps.prepare_data_loaders1(CONFIG,train_ids,golabel_to_proteins[gl],
-                                    data=(input_dim, data_dict))
+                                    data=(input_dim, data_dict, data_loader))
 
     model = steps.train_model(CONFIG,train_loader,val_loader)
     model_pred_file1 = CONFIG['MODEL_RESULT'].replace('.tsv',"-%s.tsv"%(gl,))
     steps.predict(CONFIG,model,data_loader,go,[golabels[gl]],filename=model_pred_file1)
+    if gl % 10 == 0 and gl != 0:
+        steps.merge_preds(CONFIG)
 
 steps.merge_preds(CONFIG)
 result_file = CONFIG["RESULT"]

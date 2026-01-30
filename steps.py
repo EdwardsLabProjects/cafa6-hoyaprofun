@@ -578,7 +578,7 @@ def train_model(CONFIG,train_loader,val_loader):
     # TRAINING
     # ============================================================================
     print("\n" + "="*80)
-    print(f"TRAINING ({CONFIG['EPOCHS']} EPOCHS WITH LABEL SMOOTHING)")
+    print(f"TRAINING")
     print("="*80)
 
     criterion = nn.BCEWithLogitsLoss()
@@ -655,6 +655,9 @@ def train_model(CONFIG,train_loader,val_loader):
         else:
             print(f"Epoch {epoch+1}: Train={train_loss_avg:.4f}, Val={val_loss_avg:.4f}")
 
+        if (epoch - (best_weights_from[0]-1)) >= CONFIG['TRAIN_MAX_NOBEST']:
+            break
+
     print(f"Setting model to best weights - Epoch {best_weights_from[0]}: Train={best_weights_from[1]:.4f} Val={best_weights_from[2]:.4f}")
     model.load_state_dict(best_weights)            
     return model
@@ -670,17 +673,12 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
 
     model.eval()
 
-    print_progress = False
-    if not sys.stderr.isatty():
-        print_progress = True
-        total = len(data_loader)
-
     n_predictions = 0
     with open(filename, 'w', newline='') as f:
         with torch.no_grad():
             iteration = 0
             next_progress = 0
-            for batch_ids, X_batch in tqdm(data_loader, desc="Predicting", total=len(data_loader), ascii=True, disable=None):
+            for batch_ids, X_batch in data_loader:
                 X_batch = X_batch.to(CONFIG['device'], non_blocking=True)
                 if CONFIG['is_cuda']:
                     with torch.amp.autocast('cuda'):
@@ -716,12 +714,6 @@ def predict(CONFIG,model,data_loader,go,golabels,filename=None):
                 
                 del X_batch, outputs, logits, batch_ids
                 iteration += 1
-                if print_progress and (next_progress < time.time()):
-                    tqdm.write("Progress: %d/%d."%(iteration,total),file=sys.stderr)
-                    next_progress = (time.time() + 15)
-
-            if print_progress:
-                tqdm.write("Progress: %d/%d."%(iteration,total),file=sys.stderr)
 
     print(f">> Generated {n_predictions:,} predictions")
     return filename
@@ -756,6 +748,7 @@ def read_submission(filename,**kwargs):
         kwargs['header'] = None
     if 'names' not in kwargs:
         kwargs['names'] = ["Id","GO term","Confidence"]
+    print("Reading submission file:",filename)
     chunks = []
     for chunk in pd.read_csv(filename, sep='\t', chunksize=1000000, **kwargs):
         chunks.append(chunk)
@@ -765,13 +758,16 @@ def read_submission(filename,**kwargs):
             gc.collect()
     return pd.concat(chunks, ignore_index=True)
 
-def read_submissions(fileglob,**kwargs):
+def read_submissions(fileglob,*args,**kwargs):
     if 'header' not in kwargs:
         kwargs['header'] = None
     if 'names' not in kwargs:
         kwargs['names'] = ["Id","GO term","Confidence"]
     chunks = []
-    for filename in glob.glob(fileglob):
+    for filename in args + glob.glob(fileglob):
+      if not os.path.exists(filename):
+        continue
+      print("Reading submission file:",filename)
       for chunk in pd.read_csv(filename, sep='\t', chunksize=1000000, **kwargs):
         chunks.append(chunk)
         if len(chunks) >= 10:
@@ -784,17 +780,18 @@ def read_submissions(fileglob,**kwargs):
     return df.loc[max_value_indices]
 
 def merge_preds(CONFIG):
-    model_df = read_submissions(CONFIG["MODEL_RESULT"].replace(".tsv","-*.tsv"))
+    model_df = read_submissions(CONFIG["MODEL_RESULT"].replace(".tsv","-*.tsv"),CONFIG["MODEL_RESULT"])
+    print("Writing submission file:",CONFIG["MODEL_RESULT"])
     model_df.to_csv(CONFIG["MODEL_RESULT"], sep='\t', header=False, index=False,
-                   quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
-                   float_format="%.3f")
+                    quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
+                    float_format="%.3f")
 
 def combine_preds(CONFIG,pred_file=None):
 
     if pred_file is None:
         pred_file = CONFIG["RESULT"]
 
-    goa_df = read_submissions(CONFIG["GOA_RESULT"])
+    goa_df = read_submission(CONFIG["GOA_RESULT"])
     goa_df['GOA_Confidence'] = goa_df['Confidence']
     goa_df['Confidence'] = goa_df['Confidence'] * CONFIG['GOA_WEIGHT']
 
@@ -818,12 +815,12 @@ def combine_preds(CONFIG,pred_file=None):
     
     ensemble_df = ensemble_df[['Id', 'GO term', 'Confidence']]
     ensemble_df = ensemble_df.sort_values(['Id', 'Confidence'], ascending=[True, False])
-    ensemble_df = ensemble_df.groupby('Id').head(1500)
+    ensemble_df = ensemble_df.groupby('Id').head(CONFIG['MAX_PREDS_PER_PROTEIN'])
   
     ensemble_df.to_csv(pred_file, sep='\t', header=False, index=False,
                        quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
                        float_format="%.3f")
-    print(f">> Saved {len(ensemble_df):,} predictions")
+    print(f">> Saved {len(ensemble_df):,} predictions to {pref_file}.")
 
 def write_submission_plot(CONFIG,*filenames,outfile=None):
     if outfile is None:
