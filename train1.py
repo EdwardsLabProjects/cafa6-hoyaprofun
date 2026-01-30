@@ -1,4 +1,4 @@
-#!.venv/bin/python
+#!.venv/bin/python -u
 
 import sys, glob, os
 import steps
@@ -29,11 +29,14 @@ input_dim, data_dict = steps.prepare_data_loaders2(CONFIG,
                                  embed=(embed_dim, protein_to_embed))
 
 resultfiles = CONFIG['MODEL_RESULT'].replace('.tsv',"-*.tsv")
+if os.path.exists(CONFIG['MODEL_RESULT']):
+    os.unlink(CONFIG['MODEL_RESULT'])
 for fn in glob.glob(resultfiles):
     os.unlink(fn)
 
 data_loader = None
 for gl in range(len(golabels)):
+    print(f"\n>> Train model and predict for {gl}:{golabels[gl]}.")
     # Prepare training and testing data loaders
     train_loader, val_loader, data_loader = \
         steps.prepare_data_loaders1(CONFIG,train_ids,golabel_to_proteins[gl],
@@ -44,6 +47,8 @@ for gl in range(len(golabels)):
     steps.predict(CONFIG,model,data_loader,go,[golabels[gl]],filename=model_pred_file1)
     if gl % 10 == 0 and gl != 0:
         steps.merge_preds(CONFIG)
+        for fn in glob.glob(resultfiles):
+            os.unlink(fn)
 
 steps.merge_preds(CONFIG)
 result_file = CONFIG["RESULT"]

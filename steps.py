@@ -766,7 +766,7 @@ def read_submissions(fileglob,*args,**kwargs):
     if 'names' not in kwargs:
         kwargs['names'] = ["Id","GO term","Confidence"]
     chunks = []
-    for filename in args + glob.glob(fileglob):
+    for filename in list(args) + glob.glob(fileglob):
       if not os.path.exists(filename):
         continue
       print("Reading submission file:",filename)
