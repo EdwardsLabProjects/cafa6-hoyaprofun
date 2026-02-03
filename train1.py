@@ -51,6 +51,8 @@ for gl in range(len(golabels)):
             os.unlink(fn)
 
 steps.merge_preds(CONFIG)
+for fn in glob.glob(resultfiles):
+    os.unlink(fn)
 result_file = CONFIG["RESULT"]
 if CONFIG['MERGE_WITH_GOA']:
     goa_pred_file = steps.write_goa_preds(CONFIG)

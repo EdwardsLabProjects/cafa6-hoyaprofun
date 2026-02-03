@@ -1,6 +1,6 @@
 #!.venv/bin/python
 
-import sys
+import sys, os
 import steps
 
 print("\n[0/6] Load configuration and initial files...")
@@ -10,11 +10,12 @@ CONFIG = steps.configuration(sys.argv[1:],withseed=True)
 go = steps.load_ontology(CONFIG)
 weights = steps.load_weights(CONFIG)
 cumweights = steps.compute_cumweights(CONFIG,weights,go)
-train_ids = steps.load_train_ids(CONFIG)
+# train_ids = steps.load_train_ids(CONFIG)
 test_ids = steps.load_test_ids(CONFIG)
 
 # Train proteins only (n, dict)
 golabels, protein_to_golabel = steps.load_go_terms(CONFIG,cumweights)
+train_ids = set(protein_to_golabel.keys())
 
 # Train and test proteins (n, dict)
 ngoaterm, protein_to_goaterm = steps.load_goa_terms(CONFIG,train_ids)
@@ -37,6 +38,7 @@ result_file = CONFIG["RESULT"]
 if CONFIG['MERGE_WITH_GOA']:
     goa_pred_file = steps.write_goa_preds(CONFIG)
     steps.combine_preds(CONFIG,model_pred_file,goa_pred_file,result_file)
+    os.remove(goa_pred_file)
 else:
     shutil.copy(model_pred_file,result_file)
 

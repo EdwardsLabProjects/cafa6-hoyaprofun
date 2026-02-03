@@ -477,7 +477,7 @@ def prepare_data_loaders1(CONFIG, train_ids, class1_ids, **kwargs):
     if len(class1_ids) > CONFIG['MAX_TERM_PROT_TRAIN']:
         class1_ids = set(random.sample(list(class1_ids),CONFIG['MAX_TERM_PROT_TRAIN']))
     class0_ids = valid_train_proteins - class1_ids
-    class0_ids = random.sample(list(class0_ids),len(class1_ids))
+    class0_ids = random.sample(list(class0_ids),int(CONFIG['TRAIN_CLASS1_MULT']*len(class1_ids)))
     all_ids = list(class1_ids) + list(class0_ids)
   
     y_encoded = np.concatenate([np.ones((len(class1_ids),1)),
@@ -779,7 +779,7 @@ def read_submissions(fileglob,*args,**kwargs):
             gc.collect()
       fdf = pd.concat(chunks, ignore_index=True)
       colnames = fdf.columns.tolist()
-      fdf = fdf.groupby(colnames[0:2],as_index=False)[colnames[2]].mean()
+      fdf = fdf.groupby(colnames[0:2],as_index=False)[colnames[2]].max()
       filedfs.append(fdf)
       if len(filedfs) >= 10:
           df = pd.concat(filedfs, ignore_index=True)
@@ -788,7 +788,8 @@ def read_submissions(fileglob,*args,**kwargs):
     df = pd.concat(filedfs, ignore_index=True)
     colnames = df.columns.tolist()
     max_value_indices = df.groupby(colnames[0:2])[colnames[2]].idxmax()
-    return df.loc[max_value_indices]
+    df = df.loc[max_value_indices]
+    return df
 
 def merge_preds(CONFIG):
     model_df = read_submissions(CONFIG["MODEL_RESULT"].replace(".tsv","-*.tsv"),CONFIG["MODEL_RESULT"])
@@ -831,7 +832,7 @@ def combine_preds(CONFIG,pred_file=None):
     ensemble_df.to_csv(pred_file, sep='\t', header=False, index=False,
                        quoting=csv.QUOTE_NONE, escapechar='\\', lineterminator='\n',
                        float_format="%.3f")
-    print(f">> Saved {len(ensemble_df):,} predictions to {pref_file}.")
+    print(f">> Saved {len(ensemble_df):,} predictions to {pred_file}.")
 
 def write_submission_plot(CONFIG,*filenames,outfile=None):
     if outfile is None:
